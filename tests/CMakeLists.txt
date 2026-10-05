@@ -19,7 +19,8 @@ set(LUCID_FIXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_executable(test_core
     core/test_core_smoke.cpp
     core/test_source_location.cpp
-)
+    core/test_string_pool.cpp
+) 
 
 target_link_libraries(test_core PRIVATE
     lucid_core

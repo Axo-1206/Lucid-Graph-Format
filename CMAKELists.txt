@@ -49,8 +49,7 @@ set(LUCID_MSVC_FLAGS
 # ─── Library: lucid_core ───────────────────────────────────────────────────
 
 add_library(lucid_core STATIC
-    # Explicit source list. Add one line per new .cpp.
-    core/src/core/placeholder.cpp
+    core/src/core/memory/StringPool.cpp
 )
 
 target_include_directories(lucid_core
