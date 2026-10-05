@@ -1,0 +1,150 @@
+cmake_minimum_required(VERSION 3.15)
+
+project(LucidFormat LANGUAGES CXX)
+
+# ─── Standard & compiler identity ──────────────────────────────────────────
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# ─── MSVC runtime consistency ──────────────────────────────────────────────
+#
+# Pin every target — including FetchContent-pulled ones like Catch2 — to
+# the dynamic MSVC runtime. Without this, the linker reports LNK2038
+# "RuntimeLibrary mismatch" when a dependency picks a different runtime
+# than the main targets.
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+
+# ─── Default build type for single-config generators ───────────────────────
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+endif()
+
+# ─── Warning options ───────────────────────────────────────────────────────
+
+option(LUCID_WERROR "Treat warnings as errors" OFF)
+
+set(LUCID_CXX_WARNINGS
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
+)
+
+if(LUCID_WERROR)
+    list(APPEND LUCID_CXX_WARNINGS
+        $<$<CXX_COMPILER_ID:MSVC>:/WX>
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Werror>
+    )
+endif()
+
+set(LUCID_MSVC_FLAGS
+    /FS        # force sequential PDB writes
+    /MP        # multi-processor compilation
+)
+
+# ─── Library: lucid_core ───────────────────────────────────────────────────
+
+add_library(lucid_core STATIC
+    # Explicit source list. Add one line per new .cpp.
+    core/src/core/placeholder.cpp
+)
+
+target_include_directories(lucid_core
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/core/include"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/core/src"
+)
+
+target_compile_options(lucid_core PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid_core PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
+# ─── Library: lucid_parser ─────────────────────────────────────────────────
+
+add_library(lucid_parser STATIC
+    parser/src/parser/placeholder.cpp
+)
+
+target_include_directories(lucid_parser
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/parser/include"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/parser/src"
+)
+
+target_link_libraries(lucid_parser PUBLIC lucid_core)
+
+target_compile_options(lucid_parser PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid_parser PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
+# ─── Library: lucid_formatter ──────────────────────────────────────────────
+
+add_library(lucid_formatter STATIC
+    formatter/src/formatter/placeholder.cpp
+)
+
+target_include_directories(lucid_formatter
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/formatter/include"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/formatter/src"
+)
+
+target_link_libraries(lucid_formatter PUBLIC
+    lucid_core
+    lucid_parser
+)
+
+target_compile_options(lucid_formatter PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid_formatter PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
+# ─── Executable: lucid-fmt ─────────────────────────────────────────────────
+
+add_executable(lucid-fmt
+    src/main.cpp
+)
+
+# lucid_formatter PUBLIC-links lucid_parser and lucid_core, so listing
+# only lucid_formatter is enough.
+target_link_libraries(lucid-fmt PRIVATE lucid_formatter)
+
+target_compile_options(lucid-fmt PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid-fmt PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
+# ─── Tests ─────────────────────────────────────────────────────────────────
+
+enable_testing()
+add_subdirectory(tests)
+
+# ─── Summary ───────────────────────────────────────────────────────────────
+
+message(STATUS "")
+message(STATUS "========================================")
+message(STATUS "Lucid Format — build configuration")
+message(STATUS "========================================")
+message(STATUS "Project:        ${PROJECT_NAME}")
+message(STATUS "C++ standard:   ${CMAKE_CXX_STANDARD}")
+message(STATUS "Build type:     ${CMAKE_BUILD_TYPE}")
+message(STATUS "Generator:      ${CMAKE_GENERATOR}")
+message(STATUS "Werror:         ${LUCID_WERROR}")
+message(STATUS "")
+message(STATUS "Libraries:")
+message(STATUS "  lucid_core       (core/)")
+message(STATUS "  lucid_parser     (parser/)")
+message(STATUS "  lucid_formatter  (formatter/)")
+message(STATUS "")
+message(STATUS "Executable:")
+message(STATUS "  lucid-fmt        (src/main.cpp)")
+message(STATUS "========================================")
