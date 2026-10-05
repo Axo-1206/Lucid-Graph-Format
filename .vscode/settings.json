@@ -1,11 +1,10 @@
-// {
-//     "clangd.arguments": [
-//         "--background-index",
-//         "--clang-tidy",
-//         "--header-insertion=never",
-//         "--completion-style=detailed",
-//         "--query-driver=C:/Program Files/Microsoft Visual Studio/2022/**/VC/Tools/MSVC/**/bin/Hostx64/x64/cl.exe"
-//     ],
-//     "clangd.onConfigChanged": "restart",
-//     "C_Cpp.intelliSenseEngine": "disabled"
-// }
+{
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=build",
+        "--clang-tidy",
+        "--header-insertion=iwyu",
+        "--completion-style=detailed",
+        "-j=4"
+    ]
+}
