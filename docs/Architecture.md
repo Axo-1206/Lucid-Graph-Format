@@ -101,8 +101,6 @@ The `core` layer contains the pieces that every other layer needs: tokens, AST n
 
 **`diagnostics/Diagnostic.hpp`** — a diagnostic: code, severity, message, source location, related locations.
 
-**`diagnostics/StackTrace.hpp`** — a stack of diagnostics, used to collect multiple errors from a single pass.
-
 **`trivia/Trivia.hpp`** — one piece of trivia: a comment or a run of whitespace.
 
 **`trivia/TriviaBuffer.hpp`** — a buffer of trivia attached to a token. Used by the formatter to preserve comments.

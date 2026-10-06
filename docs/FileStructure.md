@@ -34,8 +34,7 @@ lucid_format/                          ← the new repo
 │   │   │
 │   │   ├── diagnostics/
 │   │   │   ├── DiagCode.hpp           ← rewritten for the new grammar
-│   │   │   ├── Diagnostic.hpp         ← kept
-│   │   │   └── StackTrace.hpp         ← kept
+│   │   │   └── Diagnostic.hpp         ← kept
 │   │   │
 │   │   └── trivia/
 │   │       ├── Trivia.hpp             ← new: comment + whitespace
@@ -47,15 +46,18 @@ lucid_format/                          ← the new repo
 │       ├── memory/
 │       │   └── StringPool.cpp         ← kept
 │       ├── diagnostics/
-│       │   ├── Diagnostic.cpp         ← kept
-│       │   └── StackTrace.cpp         ← kept
+│       │   └── Diagnostic.cpp         ← kept
 │       └── trivia/
 │           └── TriviaBuffer.cpp       ← new
 │
 ├── parser/                            ← lexer + parser
 │   ├── include/parser/
 │   │   ├── Parser.hpp                 ← rewritten for the new grammar
-│   │   └── Lexer.hpp                  ← rewritten for the new grammar
+│   │   ├── lexer/
+│   │   │   └── Lexer.hpp                  ← rewritten for the new grammar
+│   │   └── context/
+│   │       ├── ParserContext.hpp
+│   │       └── TokenStream.hpp
 │   │
 │   └── src/parser/
 │       ├── Parser.cpp
@@ -63,7 +65,6 @@ lucid_format/                          ← the new repo
 │       │   ├── Lexer.cpp
 │       │   └── TriviaScanner.hpp/.cpp ← new: capture comments + whitespace
 │       ├── context/
-│       │   ├── ParserContext.cpp      ← adapted
 │       │   └── TokenStream.cpp   ← adapted
 │       ├── rules/
 │       │   ├── ParseDecl.cpp          ← import/enum/resource/node/composite
