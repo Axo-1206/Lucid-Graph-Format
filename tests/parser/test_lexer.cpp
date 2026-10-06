@@ -21,7 +21,7 @@
 /// the resulting token types and, where relevant, the interned payload of
 /// each token.
 
-#include "parser/Lexer.hpp"
+#include "parser/lexer/Lexer.hpp"
 
 #include "core/Tokens.hpp"
 #include "core/diagnostics/Diagnostic.hpp"

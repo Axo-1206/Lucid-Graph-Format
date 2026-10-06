@@ -20,7 +20,7 @@
  * first character is consumed.
  */
 
-#include "parser/Lexer.hpp"
+#include "parser/lexer/Lexer.hpp"
 
 #include <cstring>
 #include <string>
