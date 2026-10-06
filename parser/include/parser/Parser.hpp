@@ -57,6 +57,7 @@
 #include "core/ast/AttributeAST.hpp"
 #include "parser/context/ParserContext.hpp"
 #include "parser/context/TokenStream.hpp"
+#include "parser/support/ErrorRecovery.hpp"
 
 #include <string_view>
 #include <vector>

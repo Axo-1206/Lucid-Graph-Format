@@ -55,6 +55,8 @@ add_executable(test_parser
     parser/test_parse_type.cpp
     parser/test_parse_value.cpp
     parser/test_parse_node.cpp
+    parser/test_parse_decl.cpp
+    parser/test_parse_composite.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
