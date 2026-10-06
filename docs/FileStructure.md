@@ -20,11 +20,12 @@ lucid_format/                          ← the new repo
 │   │   ├── Primitives.hpp             ← kept (PrimitiveKind)
 │   │   │
 │   │   ├── ast/
-│   │   │   ├── BaseAST.hpp            ← adapted
-│   │   │   ├── DeclAST.hpp            ← rewritten (Import/Enum/Resource/Node/Composite)
-│   │   │   ├── ValueAST.hpp           ← new: the four value forms
-│   │   │   ├── TypeAST.hpp            ← rewritten (type_id only)
-│   │   │   └── AttributeAST.hpp       ← new: @export
+│   │   │   ├── BaseAST.hpp
+│   │   │   ├── DeclAST.hpp
+│   │   │   ├── ModuleAST.hpp
+│   │   │   ├── ValueAST.hpp
+│   │   │   ├── TypeAST.hpp
+│   │   │   └── AttributeAST.hpp
 │   │   │
 │   │   ├── memory/
 │   │   │   ├── ASTArena.hpp           ← kept
