@@ -52,6 +52,7 @@ add_executable(test_parser
     parser/test_grammar_positions.cpp
     parser/test_error_recovery.cpp
     parser/test_parser_skeleton.cpp
+    parser/test_parse_type.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
