@@ -16,10 +16,8 @@ lucid_format/                          ← the new repo
 │   ├── include/core/
 │   │   ├── SourceLocation.hpp         ← kept
 │   │   ├── Tokens.hpp                 ← rewritten for the new grammar
-│   │   ├── TokenKind.hpp              ← new: enum + predicates split out
 │   │   ├── ASTStrings.hpp             ← rewritten
 │   │   ├── Primitives.hpp             ← kept (PrimitiveKind)
-│   │   ├── ArrayKind.hpp              ← kept
 │   │   │
 │   │   ├── ast/
 │   │   │   ├── BaseAST.hpp            ← adapted
