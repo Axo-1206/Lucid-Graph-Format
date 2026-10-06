@@ -1,27 +1,58 @@
 /// @file parser/src/parser/Parser.cpp
 ///
-/// @brief Implementation of the parser's entry point and dispatcher.
+/// @brief The parser's entry point and top-level dispatcher.
 ///
-/// ─── Current state: STUB ──────────────────────────────────────────────────
-/// Both functions are stubs. They report Internal_NotImplemented and return
-/// the minimum valid value for their signature. They do not consume tokens,
-/// they do not lex, and they do not call the rules/ parsers.
+/// ─── parseDecl ────────────────────────────────────────────────────────────
+/// Reads the attribute list, checks that the current token can begin a
+/// declaration, dispatches via `parseDeclByKeyword` (ParseDeclInternal.hpp),
+/// and attaches the attributes to the returned declaration.
 ///
-/// The real implementations land in Phase 3, in this order:
+/// Returns `nullptr` in two cases:
 ///
-///   - `parseDecl`: read the attribute list, dispatch on the current
-///     token, attach the attributes to the returned declaration.
-///   - `parseFile`: intern the path, tag diagnostics with the file, lex
-///     the source, parse top-level declarations in a loop, recover on
-///     failure, and build the ModuleAST.
+///   1. The current token cannot begin a declaration (no `@` and no
+///      declaration keyword). This is the SKIP path: the caller's loop
+///      runs the synchronizer.
 ///
-/// The stub form exists so that the whole parser links and so that the
-/// skeleton test (`tests/parser/test_parser_skeleton.cpp`) can assert that
-/// `parseFile` returns a non-null ModuleAST* with `hasErrors == true`.
+///   2. An attribute list was read, but the token after it is not a
+///      declaration keyword. Report `Syntax_ExpectedDeclaration` and
+///      return `nullptr`.
+///
+/// ─── parseFile ────────────────────────────────────────────────────────────
+/// Interns the path, tags diagnostics with the file, lexes the source
+/// into a fresh TokenStream, runs the top-level loop, and builds the
+/// ModuleAST.
+///
+/// The loop:
+///   1. Checks `canStartTopDecl` for the current token.
+///   2. If it can, calls `parseDecl`. If the result is non-null, appends
+///      it to the module's declaration list.
+///   3. If the token cannot begin a declaration, reports
+///      `Syntax_ExpectedDeclaration` once.
+///   4. If `parseDecl` returned null or step 3 fired, runs the top-level
+///      stop-set synchronizer to skip to the next plausible declaration
+///      start.
+///   5. If the synchronizer reports ForeignCloser, reports
+///      `Syntax_UnexpectedToken`, consumes the offending `}`, and
+///      continues.
+///   6. If the synchronizer reports ReachedEnd, exits the loop.
+///
+/// The loop checks `ctx.canContinue()` to respect the error cap. A file
+/// with hundreds of errors stops producing diagnostics once the cap is
+/// hit; the module is returned with whatever was parsed.
+///
+/// ─── The top-level stop set ───────────────────────────────────────────────
+/// The stop set is a lambda local to `parseFile`. It stops on any token
+/// that can begin a top-level declaration at brace depth 0. It does not
+/// stop on a stray `}`; the scanner treats that as a foreign closer and
+/// the loop exits.
 
 #include "parser/Parser.hpp"
+#include "parser/rules/ParseDeclInternal.hpp"
 
 #include "core/diagnostics/DiagCode.hpp"
+#include "parser/lexer/Lexer.hpp"
+#include "parser/support/ErrorRecovery.hpp"
+#include "parser/support/GrammarPositions.hpp"
 
 using namespace lucid::diag;
 
@@ -29,76 +60,147 @@ namespace lucid::parser
 {
 
     // =============================================================================
-    // parseDecl — dispatcher (STUB)
+    // parseDecl — the top-level dispatcher
     // =============================================================================
 
-    /// @brief Parse one top-level declaration. STUB.
-    ///
-    /// The real implementation will:
-    ///   1. Read the attribute list with `parseAttributeList`.
-    ///   2. Look at the current token.
-    ///   3. Dispatch to the matching declaration parser.
-    ///   4. Attach the attribute list to the returned DeclAST.
-    ///   5. Return the declaration, or nullptr if the current token cannot
-    ///      begin a declaration.
-    ///
-    /// The stub reports NotImplemented and returns nullptr. It does not
-    /// consume tokens, so the caller's recovery scan takes over immediately
-    /// if `parseFile` is ever called against the stub form of `parseDecl`.
     DeclAST *parseDecl(TokenStream &stream, ParserContext &ctx)
     {
-        ctx.diag.errorAt(DiagCode::Internal_NotImplemented,
-                         stream.currentLoc(),
-                         "parseDecl: not yet implemented");
-        return nullptr;
+        // ─── Fast rejection ────────────────────────────────────────────────
+        // If the current token cannot begin a declaration and it is not
+        // an attribute, there is nothing to parse. Return nullptr without
+        // consuming anything; the caller's loop recovers.
+        if (!stream.check(TokenType::AT_SIGN) &&
+            !canStartTopDecl(stream.peekType()))
+        {
+            return nullptr;
+        }
+
+        // ─── The attribute list ────────────────────────────────────────────
+        const SourceLocation startLoc = stream.currentLoc();
+        ArenaSpan<AttributeAST *> attrs = parseAttributeList(stream, ctx);
+
+        // ─── The declaration keyword ───────────────────────────────────────
+        // After the attribute list, the next token must begin a declaration.
+        if (!canStartTopDecl(stream.peekType()) ||
+            stream.check(TokenType::AT_SIGN))
+        {
+            // An `@` here means two `@` in a row — the attribute list
+            // parser should have consumed both. Reaching here is a
+            // caller bug, but report it as a user-facing error for safety.
+            ctx.diag.errorAt(DiagCode::Syntax_ExpectedDeclaration,
+                             stream.currentLoc(),
+                             "expected a declaration after the attribute list");
+            return nullptr;
+        }
+
+        // ─── The declaration ───────────────────────────────────────────────
+        DeclAST *decl = parseDeclByKeyword(stream, ctx);
+        if (!decl)
+        {
+            // parseDeclByKeyword reported the error. Return nullptr; the
+            // caller's loop recovers.
+            return nullptr;
+        }
+
+        // ─── Attach the attributes ─────────────────────────────────────────
+        // The specific parsers set `attributes` to an empty span (the
+        // DeclAST constructor default). Replace it if we read any.
+        if (!attrs.empty())
+        {
+            decl->attributes = attrs;
+            decl->loc = startLoc; // the declaration's location is the first `@`
+        }
+
+        return decl;
     }
 
     // =============================================================================
-    // parseFile — entry point (STUB)
+    // parseFile — the entry point
     // =============================================================================
 
-    /// @brief Parse one source file into a ModuleAST. STUB.
-    ///
-    /// The real implementation will:
-    ///   1. Intern the path.
-    ///   2. Construct a ScopedDiagnosticFile guard.
-    ///   3. Lex the source into a fresh TokenStream.
-    ///   4. Parse top-level declarations in a loop until EOF or an error cap.
-    ///   5. Recover from a failed declaration with a stop set built from
-    ///      `GrammarPositions.hpp`.
-    ///   6. Build and return the ModuleAST.
-    ///
-    /// The stub does none of that. It interns the path, tags the diagnostic
-    /// with the file, reports NotImplemented, and returns an empty module
-    /// with `hasErrors == true`. It does not lex, does not loop, and does
-    /// not call `parseDecl`.
-    ///
-    /// The stub never returns null: a caller can rely on the postcondition
-    /// documented in Parser.hpp.
     ModuleAST *parseFile(std::string_view path,
                          std::string_view source,
                          ParserContext &ctx)
     {
-        // Intern the path so the diagnostic and the module both carry a
-        // valid file identity. This is the only real work the stub does.
-        InternedString filePath = ctx.pool.intern(path);
+        // ─── Intern the path ───────────────────────────────────────────────
+        const InternedString filePath = ctx.pool.intern(path);
 
-        // Tag every diagnostic raised in this scope with the file identity.
-        // The guard's destructor restores the previous file, so nested
-        // parses (an LSP analyzing a background file) do not leak the tag.
+        // ─── Tag diagnostics with the file ─────────────────────────────────
+        // The guard sets the engine's current file and restores the
+        // previous value on destruction. Nested parses (an LSP analyzing
+        // a background file) do not leak the tag.
         ScopedDiagnosticFile guard(ctx, filePath);
 
-        // `source` is unused in the stub. Mark it to avoid a warning under
-        // /W4 without changing the signature.
-        (void)source;
+        // ─── Lex the source ────────────────────────────────────────────────
+        // The lexer produces a fresh token vector ending with EOF. The
+        // stream is local to this parse; the context's `stream` field is
+        // a leftover from an earlier design and is not used.
+        std::vector<Token> tokens =
+            lexer::tokenize(source, ctx.pool, ctx.diag);
+        TokenStream stream(std::move(tokens));
 
-        ctx.diag.errorAt(DiagCode::Internal_NotImplemented,
-                         SourceLocation{1, 1},
-                         "parseFile: not yet implemented");
+        // ─── The top-level loop ────────────────────────────────────────────
+        auto decls = ctx.arena.makeBuilder<DeclAST *>();
 
+        // The top-level stop set. Stops on any token that can begin a
+        // top-level declaration at brace depth 0.
+        const auto topLevelStop = [](TokenStream &s, int depth)
+        {
+            if (depth != 0)
+            {
+                return false;
+            }
+            return canStartTopDecl(s.peekType());
+        };
+
+        while (!stream.isAtEnd() && ctx.canContinue())
+        {
+            // ─── Try to parse a declaration ────────────────────────────────
+            if (canStartTopDecl(stream.peekType()))
+            {
+                DeclAST *decl = parseDecl(stream, ctx);
+                if (decl)
+                {
+                    decls.push_back(decl);
+                    continue;
+                }
+                // parseDecl returned nullptr (it reported the error).
+                // Fall through to recovery.
+            }
+            else
+            {
+                // The current token cannot begin a declaration. Report it
+                // once; the token will be consumed by the recovery scan
+                // below.
+                ctx.diag.errorAt(DiagCode::Syntax_ExpectedDeclaration,
+                                 stream.currentLoc(),
+                                 "expected a declaration at the top level");
+            }
+
+            // ─── Recover ───────────────────────────────────────────────────
+            const SyncResult result =
+                synchronizeUntilDepth(stream, topLevelStop);
+
+            if (result == SyncResult::ForeignCloser)
+            {
+                ctx.diag.errorAt(DiagCode::Syntax_UnexpectedToken,
+                                 stream.currentLoc(),
+                                 "unexpected '}' at the top level");
+                stream.consume();
+                continue;
+            }
+
+            if (result == SyncResult::ReachedEnd)
+            {
+                break;
+            }
+        }
+
+        // ─── Build the module ──────────────────────────────────────────────
         ModuleAST *module =
-            ctx.arena.make<ModuleAST>(filePath, ArenaSpan<DeclAST *>{});
-        module->hasErrors = true;
+            ctx.arena.make<ModuleAST>(filePath, decls.build());
+        module->loc = SourceLocation{1, 1};
+        module->hasErrors = ctx.diag.hasErrors();
         return module;
     }
 

@@ -51,12 +51,12 @@ add_executable(test_parser
     parser/test_parser_context.cpp
     parser/test_grammar_positions.cpp
     parser/test_error_recovery.cpp
-    parser/test_parser_skeleton.cpp
     parser/test_parse_type.cpp
     parser/test_parse_value.cpp
     parser/test_parse_node.cpp
     parser/test_parse_decl.cpp
     parser/test_parse_composite.cpp
+    parser/test_parse_file.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
