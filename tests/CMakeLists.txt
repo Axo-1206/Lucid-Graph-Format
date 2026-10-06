@@ -23,6 +23,12 @@ add_executable(test_core
     core/test_ast_arena.cpp
     core/test_diagnostic.cpp
     core/test_tokens.cpp
+    core/test_base_ast.cpp
+    core/test_attribute_ast.cpp
+    core/test_type_ast.cpp
+    core/test_value_ast.cpp
+    core/test_decl_ast.cpp
+    core/test_module_ast.cpp
 )
 
 target_link_libraries(test_core PRIVATE
