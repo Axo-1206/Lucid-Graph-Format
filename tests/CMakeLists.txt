@@ -53,6 +53,8 @@ add_executable(test_parser
     parser/test_error_recovery.cpp
     parser/test_parser_skeleton.cpp
     parser/test_parse_type.cpp
+    parser/test_parse_value.cpp
+    parser/test_parse_node.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
