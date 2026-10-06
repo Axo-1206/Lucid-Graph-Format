@@ -280,15 +280,13 @@ struct BaseAST
     explicit BaseAST(ASTKind k) : kind(k) {}
     virtual ~BaseAST() = default;
 
-    // ─── Type checking ──────────────────────────────────────────────────
-
     template <typename T>
-    bool isa() const { return kind == ASTKindOf<T>::value; }
+    bool isa() const { return ASTKindMatches<T>::check(kind); }
 
     template <typename T>
     T *as()
     {
-        AST_ASSERT_MSG(kind == ASTKindOf<T>::value,
+        AST_ASSERT_MSG(ASTKindMatches<T>::check(kind),
                        "ASTKind mismatch in as<T>() — caller assumed the "
                        "wrong node type");
         return static_cast<T *>(this);
@@ -297,7 +295,7 @@ struct BaseAST
     template <typename T>
     const T *as() const
     {
-        AST_ASSERT_MSG(kind == ASTKindOf<T>::value,
+        AST_ASSERT_MSG(ASTKindMatches<T>::check(kind),
                        "ASTKind mismatch in as<T>() — caller assumed the "
                        "wrong node type");
         return static_cast<const T *>(this);
