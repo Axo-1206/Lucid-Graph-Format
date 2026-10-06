@@ -113,6 +113,7 @@ set(LUCID_MSVC_FLAGS
 
 add_library(lucid_core STATIC
     core/src/core/memory/StringPool.cpp
+    core/src/core/diagnostics/Diagnostic.cpp
 )
 
 target_include_directories(lucid_core

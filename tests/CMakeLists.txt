@@ -21,6 +21,7 @@ add_executable(test_core
     core/test_source_location.cpp
     core/test_string_pool.cpp
     core/test_ast_arena.cpp
+    core/test_diagnostic.cpp
 )
 
 target_link_libraries(test_core PRIVATE
