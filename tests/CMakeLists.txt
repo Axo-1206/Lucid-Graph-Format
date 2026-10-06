@@ -49,6 +49,7 @@ add_executable(test_parser
     parser/test_lexer.cpp
     parser/test_token_stream.cpp
     parser/test_parser_context.cpp
+    parser/test_grammar_positions.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
