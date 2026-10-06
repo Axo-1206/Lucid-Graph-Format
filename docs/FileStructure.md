@@ -60,12 +60,11 @@ lucid_format/                          ← the new repo
 │   └── src/parser/
 │       ├── Parser.cpp
 │       ├── lexer/
-│       │   ├── Lexer.hpp              ← internal
 │       │   ├── Lexer.cpp
 │       │   └── TriviaScanner.hpp/.cpp ← new: capture comments + whitespace
 │       ├── context/
-│       │   ├── ParserContext.hpp      ← adapted
-│       │   └── TokenStream.hpp/.cpp   ← adapted
+│       │   ├── ParserContext.cpp      ← adapted
+│       │   └── TokenStream.cpp   ← adapted
 │       ├── rules/
 │       │   ├── ParseDecl.cpp          ← import/enum/resource/node/composite
 │       │   ├── ParseType.cpp          ← type_id

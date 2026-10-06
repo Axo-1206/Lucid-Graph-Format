@@ -133,6 +133,7 @@ endif()
 
 add_library(lucid_parser STATIC
     parser/src/parser/lexer/Lexer.cpp
+    parser/src/parser/context/TokenStream.cpp
 )
 
 target_include_directories(lucid_parser

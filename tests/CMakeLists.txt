@@ -47,6 +47,7 @@ add_test(NAME core COMMAND test_core)
 add_executable(test_parser
     parser/test_parser_smoke.cpp
     parser/test_lexer.cpp
+    parser/test_token_stream.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
