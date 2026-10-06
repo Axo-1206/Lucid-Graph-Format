@@ -32,7 +32,7 @@ Source files are UTF-8. A file is a sequence of tokens.
 import   from
 enum     resource
 node     composite
-on       input    output    emits
+on       input    output
 ```
 
 `@export` is lexed as an attribute token (see §1.6).
@@ -127,7 +127,7 @@ An `import_decl` may appear anywhere among the top-level declarations of a modul
 attribute_list ::= { '@' IDENTIFIER }
 ```
 
-An attribute list is a sequence of `@name` prefixes. The only recognized attribute is `@export`. An attribute list appears before `resource` or `composite` declarations, and before `enum` if an enum is declared in a module. Attributes on other declarations are a semantic error.
+An attribute list is a sequence of `@name` prefixes. The only recognized attribute is `@export`. An attribute list may precede any of `enum`, `resource`, `node`, or `composite`. Attributes on any other declaration are a semantic error.
 
 ### 2.4 Enums
 
@@ -139,6 +139,10 @@ enum_member_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
 Trailing comma allowed. Duplicate members within one enum are a semantic error.
 
 `enum` declarations are typically host-provided. The parser accepts them; the host registry treats them as authoritative.
+
+**Enum members are resolved to host-provided integer values at compile time.** The script author writes `Key.W`; Sema resolves it to the integer the host registered for that member. The graph stores the integer, not the name. At runtime, host node implementations receive the integer directly. The script never sees the integer.
+
+Enum values are compared by integer value. Two members of the same enum that the host assigns the same integer are a host registration error, not a format error.
 
 ### 2.5 Resources
 
@@ -216,12 +220,15 @@ composite_body_decl ::= import_decl
                       | enum_decl
                       | resource_decl
                       | node_decl
-                      | emits_decl
-
-emits_decl ::= 'emits' IDENTIFIER
 ```
 
-An `input` block declares inputs. An `output` block declares outputs, each with a right-hand side that is a `value` referring to something inside the composite body. `emits` exposes a trigger node inside the composite as an output event.
+An `input` block declares inputs. An `output` block declares outputs. Each output has a name, a type, and a right-hand side that is a `value` referring to something inside the composite body.
+
+Outputs are of two kinds, distinguished by type. A data output has a primitive, enum, handle, or array type; its right-hand side is a resource field or a node output, and outside code reads it as a value. An event output has type `Event`; its right-hand side must be a trigger node inside the composite, and outside code subscribes to it with `on`.
+
+`Event` is not a value type. See §2.9 for the full rules.
+
+**Composites are declared at module level only.** A composite may not be declared inside another composite. A composite may use another composite — whether declared in the same module or imported — which is ordinary composition. A private helper composite is achieved by declaring it at module level without `@export`.
 
 ```
 @export
@@ -232,6 +239,7 @@ composite Health {
         current:  int   = State.current
         percent:  float = DivideNode(State.current, State.max)
         on_death: Event = dead
+        on_hurt:  Event = hurt
     }
 
     resource State {
@@ -242,12 +250,35 @@ composite Health {
     node init_max = SetOnStart(State.max, max)
     node init_cur = SetOnStart(State.current, max)
 
+    node on_hurt_event = OnEvent("hurt")
+    node apply         = SubtractNode(State.current, on_hurt_event.amount)
+
     node check = LessNode(State.current, 1)
     node dead  = When(check)
+    node hurt  = When(on_hurt_event)
 }
 ```
 
-The `output` block references `State` and `dead`, which are declared in the body below. Name resolution is order-independent (§4.3).
+Used from outside:
+
+```
+import health
+
+node player_health = health.Health(100)
+
+-- Data outputs: read as values
+node hp_text = DrawText(10, 10, player_health.current)
+node hp_bar  = DrawRect(10, 30, player_health.percent, 8) on EveryFrame()
+
+-- Event outputs: subscribed to with `on`
+node respawn   = RespawnPlayer() on player_health.on_death
+node death_sfx = PlaySound("death.wav") on player_health.on_death
+node hurt_sfx  = PlaySound("hurt.wav") on player_health.on_hurt
+```
+
+The type column distinguishes data outputs (`int`, `float`) from event outputs (`Event`). Both are declared in the same block, in the same syntax.
+
+The `output` block references `State`, `dead`, and `hurt`, which are declared in the body below. Name resolution is order-independent (§4.3).
 
 ### 2.8 Values
 
@@ -272,6 +303,37 @@ A bare literal is equivalent to a primitive node whose argument is that literal:
 An `IDENTIFIER` alone refers to a node, a resource, or a composite input by name. An `IDENTIFIER.IDENTIFIER` is field access: `Config.speed`, `input_jump.value`, `player_health.current`, `Key.W`.
 
 A `node_expr` at value position creates an inline node. It is valid but discouraged; a named node is more readable and reusable.
+
+---
+
+### 2.9 The type system
+
+The format recognizes four kinds of type. Every type used anywhere in a Lucid file falls into one of them.
+
+**Primitive types.** `bool`, `char`, `string`, and the sized integer and float types (`int8` through `int64`, `uint8` through `uint64`, `float32`, `float64`). A primitive is a value: it can be read, assigned, passed as an argument, and stored in a resource.
+
+**Enum types.** A named set of members declared by the host (`Key`, `Direction`). An enum member is a value, in the same sense as a primitive: it can be read, assigned, passed, and stored.
+
+**Handle types.** Named, opaque references declared by the host (`BodyRef`, `TextureRef`, `SoundRef`, `SpriteRef`, `Array`, and any host-specific handles). A handle is a value: it can be read, assigned, passed, and stored. Handles are references — passing a handle shares the underlying resource rather than copying it. Every handle type has `nil` as a valid value, meaning "no resource."
+
+**Event type.** `Event` is a single type shared by every trigger source in the format. It is not a value. A name whose type is `Event` refers to a trigger, not to a data value. Its only legal uses are:
+
+- As the type of a composite output, exposing a trigger from inside the composite.
+- As the target of an `on` clause, subscribing an action node to the trigger.
+
+`Event` is not valid in any other position:
+
+- Not a resource field type. Resources hold data; an event is not data.
+- Not a composite input type. A composite cannot accept an event; it can only expose one.
+- Not a node argument type. Node types do not take events as arguments. A trigger source is connected to an action through an `on` clause, not by being passed.
+
+**Trigger sources.** Three things can be a trigger source: a trigger node, a composite's `Event`-typed output, and a host-provided `Event` value. All three may be the right-hand side of an `on` clause. Nothing else may.
+
+**Handle creation, lifetime, and identity.** Handles are created by host value nodes (`BodyNode`, `LoadTexture`, `IntArrayNewNode`). They are passed as node arguments, stored in resources, and compared for equality. Two handles to the same resource compare equal; two handles to different resources compare unequal. Handles are valid until the underlying resource is freed. The script cannot free a handle directly; the host frees resources through action nodes, and the host defines what happens to a stale handle.
+
+**Handle types are distinct.** `BodyRef` is not `TextureRef`. Passing one where the other is expected is a type error at Sema time.
+
+**The rule in one line.** Every type except `Event` denotes a value. `Event` denotes a trigger source, and is legal only as a composite output type and as the target of an `on` clause.
 
 ---
 
@@ -334,9 +396,6 @@ composite_body_decl ::= import_decl
                       | enum_decl
                       | resource_decl
                       | node_decl
-                      | emits_decl
-
-emits_decl ::= 'emits' IDENTIFIER
 
 -- ─── Types ──────────────────────────────────────────────────────
 
@@ -397,7 +456,7 @@ There are no statements. The top level contains only declarations. Composites co
 
 The lexer recognizes:
 
-- Keywords: `import`, `from`, `enum`, `resource`, `node`, `composite`, `on`, `input`, `output`, `emits`.
+- Keywords: `import`, `from`, `enum`, `resource`, `node`, `composite`, `on`, `input`, `output`.
 - Identifiers.
 - Literals: integers (decimal, hex, binary, octal), floats, strings, chars, `true`, `false`, `nil`.
 - Punctuation: `( ) { } [ ] , . : = @`.
@@ -480,7 +539,7 @@ Sema consumes the parser's `Module` and produces a `Graph`. It performs:
 
 1. **Import resolution.** Load every imported module, recurse.
 2. **Symbol collection.** Build a symbol table of all declarations in each module.
-3. **Type checking.** Every argument matches its slot; every field access resolves; every `on` names a trigger.
+3. **Type checking.** Every argument matches its slot; every field access resolves; every `on` names a trigger source; no name of type `Event` appears in a value position, a resource field, a composite input, or a node argument.
 4. **Composite expansion.** Inline each composite use; rename internal nodes and resources uniquely.
 5. **Cycle detection.** Value nodes must be acyclic; composite references must be acyclic.
 6. **Dead code detection.** Value nodes must be used; action nodes must have `on`.
@@ -506,17 +565,21 @@ The grammar shows `attribute_list` before `resource` and `composite` declaration
 
 **Open question:** Is one level sufficient? If not, `type_id` should become `IDENTIFIER { '.' IDENTIFIER }`, matching `module_path`.
 
-### 8.3 Composite `emits` and output overlap
+### 8.3 (Resolved) `emits` removed
 
-A composite can declare an output whose right-hand side is a trigger node (`on_death: Event = dead`). It can also declare `emits dead` separately. These two mechanisms appear to do the same thing.
-
-**Open question:** Should `emits` be removed in favor of declaring event outputs in the `output` block? The grammar currently allows both. This is redundant and should be resolved.
+The `emits` keyword and its grammar production have been removed. A composite's event outputs are declared in the `output` block with type `Event`. See §2.7 and §2.9.
 
 ### 8.4 Resource field access on imported resources
 
 An imported resource's fields are accessed as `alias.Resource.field`. The grammar's `value` production allows only `IDENTIFIER '.' IDENTIFIER`, which is two components, not three.
 
 **Open question:** Should `value` allow `IDENTIFIER '.' IDENTIFIER '.' IDENTIFIER` for imported resource field access? The current grammar does not.
+
+### 8.4a Field access to an `Event`-typed name
+
+An `Event`-typed composite output (`player_health.on_death`) is syntactically a field access, which is a `value` production. §2.9 states that `Event` is not a value, but the grammar does not currently forbid it in `value` position.
+
+**Open question:** Should `value` be restricted so that a field access whose type is `Event` is a semantic error in value position, and legal only as the target of `on`? The grammar currently accepts it in both positions; Sema must reject the invalid one.
 
 ### 8.5 Composite input/output type qualification
 
@@ -570,6 +633,18 @@ The grammar allows trailing commas in `enum_member_list`, `arg_list`, and `trigg
 
 **Open question:** Should trailing commas be allowed consistently? The current grammar is inconsistent.
 
+### 8.14 Registry stability across builds
+
+The registry assigns numeric IDs to node types and types. These IDs are used in `.lucgraph` files. If the registry changes between the build that serialized a graph and the build that loads it, the graph may not load.
+
+**Open question:** Should `.lucgraph` files carry a registry fingerprint, so that mismatches are reported clearly rather than causing a silent misbinding? The current spec does not describe such a check.
+
+### 8.15 Plugin-registered node types
+
+The registry convention (§7 and the registry spec) says registration happens once at startup, before any graph is loaded. If plugins may register node types, they must do so during startup, before the first graph load.
+
+**Open question:** What is the interface for plugin registration? The current spec does not describe it.
+
 ---
 
 ## 9. The complete grammar, consolidated
@@ -619,9 +694,6 @@ composite_body_decl ::= import_decl
                       | enum_decl
                       | resource_decl
                       | node_decl
-                      | emits_decl
-
-emits_decl ::= 'emits' IDENTIFIER
 
 type_id ::= IDENTIFIER [ '.' IDENTIFIER ]
 
