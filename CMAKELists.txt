@@ -132,7 +132,7 @@ endif()
 # ─── Library: lucid_parser ─────────────────────────────────────────────────
 
 add_library(lucid_parser STATIC
-    parser/src/parser/Lexer.cpp
+    parser/src/parser/lexer/Lexer.cpp
 )
 
 target_include_directories(lucid_parser
