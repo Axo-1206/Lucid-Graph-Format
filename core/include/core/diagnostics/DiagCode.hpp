@@ -3,19 +3,33 @@
  * @brief The diagnostic code space: severity, category, and codes.
  *
  * ─── Design: codes describe what, not when ────────────────────────────────
- * A code names a *concept*, not a pipeline stage. "Division by zero" is
- * the same code whether the constant evaluator catches it at compile
- * time or the interpreter at runtime. "Column name duplicate" is the
- * same code whether Sema reports it on a source file or an LSP reports
- * it on a buffer.
+ * A code names a *concept*, not a pipeline stage. "Unterminated string" is
+ * the same code whether the lexer catches it at compile time or an LSP
+ * reports it on a buffer.
  *
- * ─── Design: the code space reflects the language's concepts ──────────────
- * The bands follow the language's structure. This version is the
- * reference code space; Step B rewrites it for the new grammar.
+ * ─── Design: the code space reflects the new grammar ──────────────────────
+ * The grammar in docs/grammar/LUCID_GRAMMAR.md has five top-level
+ * declaration forms (import, enum, resource, node, composite), a single
+ * type reference (`type_id`), and four value forms (literal, identifier,
+ * field access, inline node). There are no functions, no statements, no
+ * operators, no tables, no sequences, and no user-defined types beyond the
+ * five declarations. The code space below covers exactly what the grammar
+ * can produce, plus the small set of names Sema will need when it lands.
  *
- * ─── Categories and severity ──────────────────────────────────────────────
+ * ─── Bands ────────────────────────────────────────────────────────────────
+ *   1000-1099  Lexical
+ *   2000-2199  Syntax (general + per-declaration)
+ *   3000-3099  Name resolution
+ *   4000-4099  Value and type
+ *   5000-5099  Attributes
+ *   5100-5199  Imports
+ *   5200-5299  Composites
+ *   7000-7099  Internal / panic / assertion
+ *   8000-8299  Warnings
+ *
  * Severity is a pure function of the code's range: 8000+ is a warning;
- * everything else is an error.
+ * everything else is an error. Code 0 is reserved for free-text notes
+ * and hints.
  */
 
 #pragma once
@@ -67,15 +81,11 @@ namespace lucid::diag
         Name,
         Type,
         Value,
-        Mutability,
-        Host,
-        Table,
-        Sequence,
         Attribute,
-        Bytecode,
-        Memory,
+        Import,
+        Composite,
+        Internal, // free-text notes and hints (code 0)
         Warning,
-        Internal, // reserved for free-text notes and hints (code 0)
         Unknown,
     };
 
@@ -93,22 +103,12 @@ namespace lucid::diag
             return "Type";
         case DiagCategory::Value:
             return "Value";
-        case DiagCategory::Mutability:
-            return "Mutability";
-        case DiagCategory::Host:
-            return "Host";
-        case DiagCategory::Table:
-            return "Table";
-        case DiagCategory::Sequence:
-            return "Sequence";
         case DiagCategory::Attribute:
             return "Attribute";
-        case DiagCategory::Bytecode:
-            return "Bytecode";
-        case DiagCategory::Memory:
-            return "Memory";
-        case DiagCategory::Warning:
-            return "Warning";
+        case DiagCategory::Import:
+            return "Import";
+        case DiagCategory::Composite:
+            return "Composite";
         case DiagCategory::Internal:
             return "Internal";
         case DiagCategory::Unknown:
@@ -130,6 +130,11 @@ namespace lucid::diag
         // ═════════════════════════════════════════════════════════════════════════
         // LEXICAL (1000-1099)
         // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Unchanged from the reference project. The new grammar's lexical set
+        // is smaller, but every lexical error the reference lexer caught is
+        // still possible: bad characters, unterminated strings, invalid
+        // escapes, malformed numbers.
 
         Lex_InvalidCharacter = 1001,
         Lex_UnknownCharacter = 1002,
@@ -143,250 +148,183 @@ namespace lucid::diag
         Lex_NewlineInString = 1010,
 
         // ═════════════════════════════════════════════════════════════════════════
-        // SYNTAX (2000-2399)
+        // SYNTAX (2000-2199)
         // ═════════════════════════════════════════════════════════════════════════
+
+        // ─── General (2000-2049) ───────────────────────────────────────────
+        //
+        // The shape-level errors every parser can produce: a token that is
+        // present but wrong, a required token that is missing, an
+        // unrecoverable parse.
 
         Syntax_ExpectedIdentifier = 2001,
-        Syntax_ExpectedType = 2002,
-        Syntax_ExpectedExpression = 2003,
-        Syntax_ExpectedToken = 2004,
-        Syntax_UnexpectedToken = 2005,
-        Syntax_ExpectedLiteral = 2006,
-        Syntax_ExpectedBlock = 2007,
-        Syntax_IncompleteDeclaration = 2008,
-        Syntax_TrailingComma = 2009,
-        Syntax_ExpectedModulePath = 2010,
+        Syntax_ExpectedToken = 2002,
+        Syntax_UnexpectedToken = 2003,
+        Syntax_ExpectedLiteral = 2004,
+        Syntax_ExpectedBlock = 2005,
+        Syntax_ExpectedClosing = 2006, // missing '}', ')', ']'
+        Syntax_IncompleteDeclaration = 2007,
 
-        Syntax_ExpectedDeclTarget = 2101,
-        Syntax_ExpectedHostTarget = 2102,
-        Syntax_InvalidTargetShape = 2103,
-        Syntax_ExpectedAttribute = 2104,
-        Syntax_MultipleDefaults = 2105,
+        // ─── Import (2050-2069) ────────────────────────────────────────────
 
-        Syntax_ExpectedColumn = 2201,
-        Syntax_ExpectedTableBody = 2202,
-        Syntax_ExpectedRow = 2203,
-        Syntax_ExpectedTableInit = 2204,
+        Syntax_ExpectedModulePath = 2050,  // 'import' with no path
+        Syntax_ExpectedImportAlias = 2051, // 'as' with no identifier
 
-        Syntax_ExpectedSwitchSubject = 2301,
-        Syntax_ExpectedCaseValue = 2302,
-        Syntax_ExpectedForBinding = 2303,
-        Syntax_ExpectedRangeBound = 2304,
-        Syntax_ExpectedFnName = 2305,
-        Syntax_ExpectedFnParams = 2306,
-        Syntax_ExpectedArrow = 2307,
-        Syntax_ExpectedAssignOp = 2308,
-        Syntax_ExpectedLValue = 2309,
-        Syntax_ExpectedSuspendArg = 2310,
+        // ─── Enum (2070-2079) ──────────────────────────────────────────────
 
-        // ═════════════════════════════════════════════════════════════════════════
-        // NAME RESOLUTION (3000-3199)
-        // ═════════════════════════════════════════════════════════════════════════
+        Syntax_ExpectedEnumName = 2070,
+        Syntax_ExpectedEnumBody = 2071,
+        Syntax_ExpectedEnumMember = 2072,
 
-        Name_UndefinedValue = 3001,
-        Name_UndefinedType = 3002,
-        Name_UndefinedModule = 3003,
-        Name_UndefinedMember = 3004,
-        Name_NotCallable = 3005,
-        Name_NotAType = 3006,
-        Name_FieldNotFound = 3007,
-        Name_MethodNotFound = 3008,
-        Name_Redeclaration = 3009,
-        Name_PrivateMember = 3010,
-        Name_ImportAliasRedeclaration = 3011,
+        // ─── Resource (2080-2099) ──────────────────────────────────────────
 
-        Name_ColumnNotFound = 3101,
-        Name_ColumnDuplicate = 3102,
-        Name_RowNotFound = 3103,
+        Syntax_ExpectedResourceName = 2080,
+        Syntax_ExpectedResourceBody = 2081,
+        Syntax_ExpectedFieldName = 2082,
+        Syntax_ExpectedFieldType = 2083,    // ':' present, type missing
+        Syntax_ExpectedFieldDefault = 2084, // '=' present, literal missing
 
-        // ═════════════════════════════════════════════════════════════════════════
-        // TYPE AND VALUE (4000-4299)
-        // ═════════════════════════════════════════════════════════════════════════
+        // ─── Node (2100-2119) ──────────────────────────────────────────────
 
-        Type_Mismatch = 4001,
-        Type_ArgCountMismatch = 4002,
-        Type_MissingInitializer = 4003,
-        Type_MissingReturn = 4004,
-        Type_ReturnMismatch = 4005,
-        Type_InvalidAssignment = 4006,
-        Type_InvalidUnary = 4007,
-        Type_InvalidBinary = 4008,
-        Type_InvalidArrayElement = 4009,
-        Type_InvalidParamType = 4010,
-        Type_InvalidReturnType = 4011,
-        Type_UnknownType = 4012,
-        Type_InvalidSwitchType = 4013,
-        Type_DuplicateCase = 4014,
-        Type_RangeBoundTypeMismatch = 4015,
-        Type_RangeStepZero = 4016,
-        Type_InvalidArraySize = 4017,
-        Type_MissingCase = 4018,
-        Type_NotLValue = 4019,
-        Type_InvalidAttributeArg = 4020,
-        Type_TopLevelInitNotConstant = 4021,
+        Syntax_ExpectedNodeName = 2100,
+        Syntax_ExpectedNodeExpr = 2101, // '=' present, expression missing
+        Syntax_ExpectedNodeType = 2102,
+        Syntax_ExpectedNodeArgList = 2103,
+        Syntax_ExpectedTriggerList = 2104, // 'on' present, no trigger
 
-        Value_DivisionByZero = 4101,
-        Value_ModuloByZero = 4102,
-        Value_IntegerOverflow = 4103,
-        Value_NumericOverflow = 4104,
-        Value_InvalidShift = 4105,
-        Value_InvalidBitwiseOp = 4106,
-        Value_ArrayIndexOutOfBounds = 4107,
-        Value_StringIndexOutOfBounds = 4108,
-        Value_NegativeArraySize = 4109,
-        Value_InvalidCast = 4110,
-        Value_CircularDependency = 4111,
-        Value_InvalidIterator = 4112,
-        Value_InvalidConcatenation = 4113,
+        // ─── Composite (2120-2159) ─────────────────────────────────────────
 
-        Mut_ConstAssignment = 4201,
-        Mut_ConstParamAssignment = 4202,
-        Mut_ReadOnlyField = 4203,
-        Mut_ModuleReadOnly = 4204,
-        Mut_NonLValueAssignment = 4205,
-        Mut_LoopBindingAssignment = 4206,
-        Mut_ConstNullableType = 4207,
-        Mut_ConstRowRefType = 4208,
+        Syntax_ExpectedCompositeName = 2120,
+        Syntax_ExpectedCompositeBody = 2121,
+        Syntax_ExpectedInputBlock = 2122,
+        Syntax_ExpectedOutputBlock = 2123,
+        Syntax_ExpectedInputField = 2124,
+        Syntax_ExpectedOutputField = 2125,
+        Syntax_ExpectedEmitsName = 2126,
+        Syntax_ExpectedOutputBinding = 2127, // '=' present, value missing
+
+        // ─── Value (2160-2179) ─────────────────────────────────────────────
+
+        Syntax_ExpectedValue = 2160,       // argument position, nothing valid
+        Syntax_ExpectedFieldAccess = 2161, // '.' present, field name missing
+
+        // ─── Attribute (2180-2199) ─────────────────────────────────────────
+
+        Syntax_ExpectedAttributeName = 2180, // '@' present, no identifier
+        Syntax_ExpectedAttributeList = 2181, // attribute list in wrong place
+        Syntax_ExpectedDeclaration = 2182,   // attribute followed by non-decl
 
         // ═════════════════════════════════════════════════════════════════════════
-        // HOST REGISTRY (5000-5099)
+        // NAME RESOLUTION (3000-3099)
         // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Sema's territory. The formatter does not resolve names, but the
+        // codes exist so that Sema's error reporting is defined in one place.
+        // They are declared here, unused, until Sema lands.
 
-        Host_SymbolNotRegistered = 5001,
-        Host_SymbolSignatureMismatch = 5002,
-        Host_TypeNotRegistered = 5003,
-        Host_TypeKindMismatch = 5004,
-        Host_HostOnlyCalledFromLucid = 5005,
-        Host_VariadicSignatureMismatch = 5006,
-
-        // ═════════════════════════════════════════════════════════════════════════
-        // TABLES (5100-5199)
-        // ═════════════════════════════════════════════════════════════════════════
-
-        Table_AddArgCountMismatch = 5101,
-        Table_AddArgTypeMismatch = 5102,
-        Table_AddOnFixed = 5103,
-        Table_AddOnReadonly = 5104,
-        Table_AddOnCapped = 5105,
-        Table_RemoveOnFixed = 5106,
-        Table_RemoveOnReadonly = 5107,
-        Table_DuplicateUniqueValue = 5108,
-        Table_IndexOutOfBounds = 5109,
-        Table_MultiplePrimary = 5110,
-        Table_SortedColumnNotFound = 5111,
-        Table_CappedExclusiveWithRows = 5112,
-        Table_PackedNonPrimitive = 5113,
-        Table_RequestOnNonHost = 5114,
-        Table_FixedCellNotConstant = 5115,
-        Table_FixedCycle = 5116,
-        Table_PackedRequiresFixed = 5117,
-        Table_FixedReadonlyConflict = 5118,
-        Table_ReserveOnFixedTable = 5119,
-        Table_FixedTableEmpty = 5120,
-        Table_PrimaryNotHashable = 5121,
-        Table_PrimaryAtMostOne = 5122,
-        Table_NameCollidesWithMethod = 5123,
-        Table_GeneratedNameCollides = 5124,
-        Table_DuplicateInitializerValue = 5125,
-        Table_HostReserveNotAllowed = 5126,
-        Table_SchemaMismatch = 5127,
+        Name_UndefinedModule = 3001,     // import path resolves to nothing
+        Name_UndefinedType = 3002,       // type_id resolves to nothing
+        Name_UndefinedNode = 3003,       // node reference resolves to nothing
+        Name_UndefinedResource = 3004,   // resource reference resolves to nothing
+        Name_UndefinedField = 3005,      // field access resolves to nothing
+        Name_UndefinedTrigger = 3006,    // trigger name resolves to nothing
+        Name_UndefinedEnumMember = 3007, // enum member resolves to nothing
+        Name_Redeclaration = 3008,       // two declarations with same name
+        Name_DuplicateEnumMember = 3009, // two members with same name
+        Name_DuplicateTrigger = 3010,    // two triggers on one node
 
         // ═════════════════════════════════════════════════════════════════════════
-        // SEQUENCES (5200-5299)
+        // VALUE AND TYPE (4000-4099)
         // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Sema's territory again. The formatter does not check types or
+        // constant-fold, but the codes exist for the pipeline's single
+        // diagnostic engine.
 
-        Seq_SuspendOutsideSequence = 5201,
-        Seq_SequenceCalledDirectly = 5202,
-        Seq_NonSequenceStarted = 5203,
-        Seq_SequenceReturnsValue = 5204,
-        Seq_SequenceHasHostBody = 5205,
-        Seq_SequenceCallingSequence = 5206,
-        Seq_SequenceAsFunctionValue = 5207,
-        Seq_WaitUntilArgTypeMismatch = 5208,
-        Seq_WaitForEventNotAFixedTable = 5209,
-        Seq_WaitForRequestNotARequest = 5210,
-        Seq_WaitArgTypeMismatch = 5211,
-        Seq_WaitFramesArgTypeMismatch = 5212,
-        Seq_SequenceNotLaunched = 5213,
+        Type_Mismatch = 4001,             // arg type does not match slot
+        Type_ArgCountMismatch = 4002,     // too many or too few args
+        Type_UnknownNodeType = 4003,      // NodeType not in registry
+        Type_UnknownType = 4004,          // type_id not in registry
+        Type_InvalidDefault = 4005,       // resource default type mismatch
+        Type_InvalidOutputBinding = 4006, // composite output binding mismatch
+        Type_InvalidNodeArg = 4007,       // argument not a valid value
+        Type_InvalidFieldAccess = 4008,   // base is not field-accessible
 
-        // ═════════════════════════════════════════════════════════════════════════
-        // ATTRIBUTES (5300-5399)
-        // ═════════════════════════════════════════════════════════════════════════
-
-        Attr_Unknown = 5301,
-        Attr_InvalidArgCount = 5302,
-        Attr_InvalidArgValue = 5303,
-        Attr_Duplicate = 5304,
-        Attr_NotApplicable = 5305,
-        Attr_NotAllowedOnLocal = 5306,
-        Attr_InvalidCombination = 5307,
-        Attr_ExportInLocalScope = 5308,
-        Attr_DeprecatedInLocalScope = 5309,
-        Attr_SequenceOnNonFn = 5310,
-        Attr_RequestOnNonHostTable = 5311,
+        Value_DuplicateFieldDefault = 4101, // resource with two defaults
 
         // ═════════════════════════════════════════════════════════════════════════
-        // BYTECODE (6000-6099)
+        // ATTRIBUTES (5000-5099)
         // ═════════════════════════════════════════════════════════════════════════
+        //
+        // The new grammar has exactly one recognized attribute: @export. Any
+        // other @name is an unknown attribute. @export itself is only
+        // meaningful on resource and composite declarations; on any other
+        // declaration it is an error.
 
-        Bc_FormatVersionMismatch = 6001,
-        Bc_BadMagic = 6002,
-        Bc_Truncated = 6003,
-        Bc_UnknownOpcode = 6004,
-        Bc_InvalidConstantRef = 6005,
-        Bc_InvalidSlotRef = 6006,
-        Bc_InvalidHostSymbolRef = 6007,
-        Bc_InvalidModuleIndex = 6008,
-        Bc_InvalidFunctionIndex = 6009,
-        Bc_HostSymbolUnresolved = 6010,
-        Bc_SerializationFailed = 6011,
-        Bc_DeserializationFailed = 6012,
+        Attr_Unknown = 5001,          // @name not recognized
+        Attr_ExportOnImport = 5002,   // @export on import_decl
+        Attr_ExportOnEnum = 5003,     // @export on enum_decl
+        Attr_ExportOnNode = 5004,     // @export on node_decl
+        Attr_ExportOnField = 5005,    // @export inside a declaration body
+        Attr_Duplicate = 5006,        // @export twice on one decl
+        Attr_ArgCountMismatch = 5007, // attribute takes no args
+        Attr_InvalidArgValue = 5008,  // (reserved for future attributes)
 
         // ═════════════════════════════════════════════════════════════════════════
-        // MEMORY AND RUNTIME PANICS (7000-7099)
+        // IMPORTS (5100-5199)
         // ═════════════════════════════════════════════════════════════════════════
+        //
+        // The formatter does not resolve imports; the CLI does, and Sema
+        // consumes the result. The codes exist for the pipeline.
 
-        Mem_AllocationFailed = 7001,
-        Mem_DanglingPointer = 7002,
-        Mem_FreeNullPointer = 7003,
-        Mem_InvalidRef = 7004,
-        Mem_TagMismatch = 7005,
+        Import_ModuleNotFound = 5101, // file does not exist
+        Import_Circular = 5102,       // A imports B imports A
+        Import_AliasCollision = 5103, // two imports bind the same name
+        Import_NotAFile = 5104,       // path resolves to a directory
 
-        Panic_Generic = 7101,
-        Panic_StackOverflow = 7102,
-        Panic_HostCallFailed = 7103,
-        Panic_UnsupportedOperation = 7104,
-        Panic_NilDereference = 7105,
-        Panic_StaleReference = 7106,
-        Panic_DuplicateKey = 7107,
-        Panic_GenerationExhausted = 7108,
+        // ═════════════════════════════════════════════════════════════════════════
+        // COMPOSITES (5200-5299)
+        // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Sema's territory. Composite expansion must be acyclic and the
+        // output block must reference names that exist in the body.
+
+        Composite_Cycle = 5201,              // composite references itself
+        Composite_OutputNotInBody = 5202,    // output binding names a missing symbol
+        Composite_EmitsNotTrigger = 5203,    // emits names a non-trigger node
+        Composite_InputNotUsed = 5204,       // input declared but never referenced
+        Composite_OutputTypeMismatch = 5205, // output type does not match binding
+
+        // ═════════════════════════════════════════════════════════════════════════
+        // INTERNAL / PANIC (7000-7099)
+        // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Compiler-internal failures. These are for the AST_ASSERT_MSG macro
+        // in BaseAST.hpp and any other invariant failure. They are not
+        // user-facing; when one fires, the compiler has a bug.
+
+        Internal_Assertion = 7001,
+        Internal_Unreachable = 7002,
+        Internal_NotImplemented = 7003,
 
         // ═════════════════════════════════════════════════════════════════════════
         // WARNINGS (8000-8299)
         // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Warnings the formatter or Sema can emit. The formatter emits a small
+        // set; Sema emits the rest when it lands.
 
-        Warn_UnreachableCode = 8001,
-        Warn_UnusedVariable = 8002,
-        Warn_UnusedParameter = 8003,
-        Warn_UnusedFunction = 8004,
-        Warn_UnusedType = 8005,
-        Warn_UnusedImport = 8006,
-        Warn_ShadowedName = 8007,
-        Warn_DiscardedResult = 8008,
-        Warn_TrivialCondition = 8009,
-        Warn_RedundantNilCheck = 8010,
-        Warn_PotentialOverflow = 8011,
-        Warn_Deprecated = 8012,
-        Warn_ImmutableOnFixed = 8013,
+        Warn_UnusedImport = 8001,
+        Warn_UnusedResource = 8002,
+        Warn_UnusedNode = 8003, // value node never referenced
+        Warn_UnusedEnum = 8004,
+        Warn_DeadNode = 8005,     // action node with no trigger
+        Warn_ShadowedName = 8006, // import alias shadows a type
+        Warn_EmptyResource = 8007,
+        Warn_EmptyComposite = 8008,
+        Warn_TrailingComma = 8009, // stylistic; formatter normalizes
 
-        Warn_SwitchMissingMember = 8101,
-        Warn_TableNeverPopulated = 8102,
-        Warn_UnusedUniqueColumn = 8103,
-        Warn_ReserveBelowInitialRows = 8104,
-
-        Warn_SequenceNeverSuspends = 8201,
-        Warn_SequenceOnlySuspends = 8202,
-        Warn_SequenceUnusedHandle = 8203,
+        Warn_Deprecated = 8100, // reserved for a future @deprecated
     };
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -409,24 +347,16 @@ namespace lucid::diag
             return DiagCategory::Syntax;
         if (v < 4000)
             return DiagCategory::Name;
-        if (v < 4100)
-            return DiagCategory::Type;
-        if (v < 4200)
-            return DiagCategory::Value;
         if (v < 5000)
-            return DiagCategory::Mutability;
+            return DiagCategory::Type;
         if (v < 5100)
-            return DiagCategory::Host;
-        if (v < 5200)
-            return DiagCategory::Table;
-        if (v < 5300)
-            return DiagCategory::Sequence;
-        if (v < 6000)
             return DiagCategory::Attribute;
-        if (v < 7000)
-            return DiagCategory::Bytecode;
+        if (v < 5200)
+            return DiagCategory::Import;
+        if (v < 6000)
+            return DiagCategory::Composite;
         if (v < 8000)
-            return DiagCategory::Memory;
+            return DiagCategory::Internal;
         if (v < 9000)
             return DiagCategory::Warning;
         return DiagCategory::Unknown;
