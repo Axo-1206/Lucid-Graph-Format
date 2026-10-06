@@ -1,6 +1,63 @@
 cmake_minimum_required(VERSION 3.15)
 
+# ─── Compiler pin (must come before project()) ─────────────────────────────
+#
+# On Windows, force MSVC. CMake's default search picks whatever `c++` is
+# first on PATH, which on a plain PowerShell is often a MinGW or Strawberry
+# Perl compiler. That compiler does not ship MSVC's headers, does not honor
+# /FS /MP, and produces a compile_commands.json that clangd cannot resolve
+# against the MSVC system headers.
+#
+# This block runs before `project()`, which is where CMake finalizes the
+# compiler. Setting CMAKE_CXX_COMPILER here (as a CACHE variable) pins it
+# for every configure, regardless of the calling shell.
+
+if(WIN32 AND NOT DEFINED CMAKE_CXX_COMPILER)
+    file(GLOB MSVC_CL_PATHS
+        "C:/Program Files/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe"
+        "C:/Program Files (x86)/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe"
+    )
+    if(MSVC_CL_PATHS)
+        list(GET MSVC_CL_PATHS 0 MSVC_CL_PATH)
+        set(CMAKE_CXX_COMPILER "${MSVC_CL_PATH}" CACHE STRING "C++ compiler" FORCE)
+        set(CMAKE_C_COMPILER   "${MSVC_CL_PATH}" CACHE STRING "C compiler"   FORCE)
+        message(STATUS "Pinned compiler: ${MSVC_CL_PATH}")
+    else()
+        message(FATAL_ERROR
+            "MSVC not found under C:/Program Files[/ (x86)]/Microsoft Visual "
+            "Studio/2022/*.\n"
+            "Install Visual Studio 2022 (or Build Tools) with the 'Desktop "
+            "development with C++' workload, then reconfigure.")
+    endif()
+endif()
+
 project(LucidFormat LANGUAGES CXX)
+
+# ─── Compiler enforcement (safety net) ─────────────────────────────────────
+#
+# On Windows, require MSVC. See the comment above for why.
+
+if(WIN32 AND NOT MSVC)
+    message(FATAL_ERROR
+        "This project targets MSVC on Windows.\n"
+        "  Detected compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\n"
+        "  Compiler path:     ${CMAKE_CXX_COMPILER}\n"
+        "\n"
+        "The pin above should have selected cl.exe. If you see this message,\n"
+        "either the pin failed or you passed a different -DCMAKE_CXX_COMPILER.\n"
+        "Open 'Developer PowerShell for VS 2022' from the Start menu and\n"
+        "reconfigure, or pass -DCMAKE_CXX_COMPILER=<path to cl.exe>.")
+endif()
+
+# ─── Environment check ─────────────────────────────────────────────────────
+
+# Only require the developer environment when using Ninja. The Visual
+# Studio generator resolves the toolchain through the registry and does
+# not need INCLUDE set in the shell.
+if(WIN32 AND MSVC AND CMAKE_GENERATOR STREQUAL "Ninja"
+        AND NOT DEFINED ENV{INCLUDE})
+    message(FATAL_ERROR "...")
+endif()
 
 # ─── Standard & compiler identity ──────────────────────────────────────────
 
@@ -11,11 +68,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ─── MSVC runtime consistency ──────────────────────────────────────────────
-#
-# Pin every target — including FetchContent-pulled ones like Catch2 — to
-# the dynamic MSVC runtime. Without this, the linker reports LNK2038
-# "RuntimeLibrary mismatch" when a dependency picks a different runtime
-# than the main targets.
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
 
@@ -24,6 +76,17 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
+
+# ─── Single-config convenience for the Visual Studio generator ─────────────
+#
+# The VS generator is multi-config; without this, every `cmake --build` and
+# `ctest` needs `--config Release`. Restricting the configuration types to
+# Release lets the build and test commands omit the flag. If you later want
+# to build Debug, remove this block or add "Debug" to the list.
+
+# if(CMAKE_CONFIGURATION_TYPES)
+#     set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
+# endif()
 
 # ─── Warning options ───────────────────────────────────────────────────────
 
