@@ -48,6 +48,7 @@ add_executable(test_parser
     parser/test_parser_smoke.cpp
     parser/test_lexer.cpp
     parser/test_token_stream.cpp
+    parser/test_parser_context.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
