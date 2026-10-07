@@ -58,6 +58,7 @@ add_executable(test_parser
     parser/test_parse_composite.cpp
     parser/test_parse_file.cpp
     parser/test_json_writer.cpp
+    parser/test_json_dumper.cpp
 )
 
 target_link_libraries(test_parser PRIVATE

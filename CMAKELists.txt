@@ -140,6 +140,7 @@ add_library(lucid_parser STATIC
     parser/src/parser/rules/ParseDecl.cpp
     parser/src/parser/rules/ParseComposite.cpp
     parser/src/parser/rules/ParseValue.cpp
+    parser/src/parser/dump/JSONDumper.cpp
 )
 
 target_include_directories(lucid_parser
