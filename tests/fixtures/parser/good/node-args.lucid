@@ -1,0 +1,4 @@
+-- A node with a single literal argument and a node with multiple
+-- arguments including an identifier.
+node speed = Float32Node(200.0)
+node dmg   = Damage(body, 10)

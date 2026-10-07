@@ -1,0 +1,1 @@
+{"kind":"Module","loc":{"line":1,"col":1},"filePath":"node-no-args.lucid","declarations":[{"kind":"NodeDecl","loc":{"line":2,"col":1},"name":"frame","expr":{"kind":"NodeExpr","loc":{"line":2,"col":14},"type":{"kind":"TypeId","loc":{"line":2,"col":14},"qualifier":null,"name":"EveryFrame"},"args":[]},"triggers":[],"attributes":[]}]}

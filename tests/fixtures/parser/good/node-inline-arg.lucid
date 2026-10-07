@@ -1,0 +1,2 @@
+-- A node whose argument is itself an inline node.
+node total = AddNode(Float32Node(1.0), Float32Node(2.0))

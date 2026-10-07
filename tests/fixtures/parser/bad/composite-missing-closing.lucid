@@ -1,0 +1,2 @@
+composite C {
+    resource R { x: int }

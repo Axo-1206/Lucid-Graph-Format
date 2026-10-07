@@ -1,0 +1,2 @@
+-- A node with a single trigger.
+node play_sfx = PlaySound("hit.wav") on on_hit

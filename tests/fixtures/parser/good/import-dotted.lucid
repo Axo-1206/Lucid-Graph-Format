@@ -1,0 +1,2 @@
+-- A dotted import path.
+import core.keys

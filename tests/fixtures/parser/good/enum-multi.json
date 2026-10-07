@@ -1,0 +1,1 @@
+{"kind":"Module","loc":{"line":1,"col":1},"filePath":"enum-multi.lucid","declarations":[{"kind":"EnumDecl","loc":{"line":2,"col":1},"name":"Direction","members":["North","South","East","West"],"attributes":[]}]}

@@ -1,0 +1,2 @@
+-- A node with a zero-argument node expression.
+node frame = EveryFrame()

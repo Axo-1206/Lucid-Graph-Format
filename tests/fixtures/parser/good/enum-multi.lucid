@@ -1,0 +1,2 @@
+-- An enum with several members.
+enum Direction { North, South, East, West }

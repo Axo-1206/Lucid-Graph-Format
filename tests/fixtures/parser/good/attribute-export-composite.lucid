@@ -1,0 +1,6 @@
+-- The @export attribute on a composite.
+@export
+composite Health {
+    output { current: int = State.current }
+    resource State { current: int = 0 }
+}

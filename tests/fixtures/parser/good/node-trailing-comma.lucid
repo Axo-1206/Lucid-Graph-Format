@@ -1,0 +1,2 @@
+-- A node expression with a trailing comma in the argument list.
+node dmg = Damage(body, 10,)

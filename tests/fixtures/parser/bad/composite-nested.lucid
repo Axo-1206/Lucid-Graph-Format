@@ -1,0 +1,3 @@
+composite Outer {
+    composite Inner { }
+}

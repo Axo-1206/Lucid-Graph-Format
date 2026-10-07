@@ -1,0 +1,3 @@
+-- A simple import with no alias. The local name defaults to the last
+-- path segment.
+import keys

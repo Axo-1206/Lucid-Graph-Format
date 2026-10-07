@@ -273,7 +273,12 @@ TEST_CASE("fixtures/good: parse and dump match stored JSON",
         jsonPath.replace_extension(".json");
         const std::string expected = readFile(jsonPath);
 
-        REQUIRE_FALSE(expected.empty());
+        if (expected.empty())
+        {
+            FAIL("missing or empty .json file for " << fileName
+                 << " — run `cmake --build build --target regen-fixtures`");
+            continue;
+        }
         CHECK(actual == expected);
     }
 }
@@ -305,6 +310,8 @@ TEST_CASE("fixtures/bad: parse produces the expected diagnostic codes",
         fs::path expectedPath = lucidPath;
         expectedPath.replace_extension(".expected");
         const auto expected = readExpectedCodes(expectedPath);
+
+        REQUIRE_FALSE(expected.empty());
 
         INFO("actual codes:   " << [&]
              { 

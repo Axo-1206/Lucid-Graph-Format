@@ -1,0 +1,2 @@
+-- An enum with a single member.
+enum Key { A }

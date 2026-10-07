@@ -1,0 +1,11 @@
+-- A composite with a data output and an event output.
+composite Health {
+    output {
+        current:  int   = State.current
+        on_death: Event = dead
+    }
+
+    resource State { current: int = 0 }
+
+    node dead = When(LessNode(State.current, 1))
+}

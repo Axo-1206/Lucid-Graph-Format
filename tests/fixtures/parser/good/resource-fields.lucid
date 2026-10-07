@@ -1,0 +1,6 @@
+-- A resource with fields: two with defaults, one without.
+resource Player {
+    speed:    float = 200.0
+    hp:       int   = 100
+    is_alive: bool
+}

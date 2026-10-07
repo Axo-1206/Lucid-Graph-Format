@@ -1,0 +1,2 @@
+-- An enum with a trailing comma after the last member.
+enum Key { W, A, S, D, }

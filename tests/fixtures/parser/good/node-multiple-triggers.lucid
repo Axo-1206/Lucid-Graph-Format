@@ -1,0 +1,2 @@
+-- A node with two triggers.
+node damage = Damage(body, 10) on on_hit, on_other

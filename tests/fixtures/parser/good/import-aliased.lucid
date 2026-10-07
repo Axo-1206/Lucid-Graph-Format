@@ -1,0 +1,2 @@
+-- An import with an explicit alias.
+import core.keys as k

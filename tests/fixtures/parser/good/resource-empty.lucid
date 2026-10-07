@@ -1,0 +1,2 @@
+-- A resource with no fields.
+resource Empty { }

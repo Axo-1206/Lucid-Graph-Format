@@ -1,0 +1,5 @@
+-- The @export attribute on a resource.
+@export
+resource Player {
+    hp: int = 100
+}
