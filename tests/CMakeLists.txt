@@ -59,6 +59,7 @@ add_executable(test_parser
     parser/test_parse_file.cpp
     parser/test_json_writer.cpp
     parser/test_json_dumper.cpp
+    parser/test_fixtures.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
@@ -91,3 +92,37 @@ target_compile_definitions(test_formatter PRIVATE
 )
 
 add_test(NAME formatter COMMAND test_formatter)
+
+# ─── lucid-fixture-regen ─────────────────────────────────────────────────
+#
+# A small tool that regenerates the parser's fixture expected files by
+# running the parser and the dumper on each good/*.lucid file and
+# writing the result to the sibling good/*.json file.
+#
+# Run it with:
+#
+#   cmake --build build --target regen-fixtures
+#
+# This builds and runs the tool. It is not part of the default build.
+
+add_executable(lucid-fixture-regen
+    tools/fixture_regen.cpp
+)
+
+target_link_libraries(lucid-fixture-regen PRIVATE
+    lucid_core
+    lucid_parser
+)
+
+target_compile_definitions(lucid-fixture-regen PRIVATE
+    FIXTURE_DIR="${LUCID_FIXTURE_DIR}"
+)
+
+# A custom target that builds and runs the tool.
+add_custom_target(regen-fixtures
+    COMMAND lucid-fixture-regen
+    DEPENDS lucid-fixture-regen
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Regenerating parser fixtures"
+    VERBATIM
+)
