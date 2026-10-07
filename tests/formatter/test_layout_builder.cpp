@@ -79,18 +79,57 @@ TEST_CASE("LayoutBuilder formats an enum with members", "[layout]")
 {
     CHECK(fmt("enum Key { A, B, C }").text ==
           "enum Key {\n"
-          "    A\n"
-          "    B\n"
-          "    C\n"
+          "    A,\n"
+          "    B,\n"
+          "    C,\n"
           "}\n");
 }
 
-TEST_CASE("LayoutBuilder drops the enum trailing comma", "[layout]")
+TEST_CASE("LayoutBuilder normalises enum to trailing-comma form", "[layout]")
 {
     CHECK(fmt("enum Key { A, B, }").text ==
           "enum Key {\n"
-          "    A\n"
-          "    B\n"
+          "    A,\n"
+          "    B,\n"
+          "}\n");
+}
+
+TEST_CASE("LayoutBuilder preserves a comment on an enum member",
+          "[layout]")
+{
+    CHECK(fmt("enum Key {\n"
+              "    A,  -- the A key\n"
+              "    B\n"
+              "}\n")
+              .text ==
+          "enum Key {\n"
+          "    A,  -- the A key\n"
+          "    B,\n"
+          "}\n");
+}
+
+TEST_CASE("LayoutBuilder preserves a leading comment on an enum member",
+          "[layout]")
+{
+    CHECK(fmt("enum Key {\n"
+              "    -- first\n"
+              "    A,\n"
+              "    B\n"
+              "}\n")
+              .text ==
+          "enum Key {\n"
+          "    -- first\n"
+          "    A,\n"
+          "    B,\n"
+          "}\n");
+}
+
+TEST_CASE("LayoutBuilder preserves a trailing comment on an attribute",
+          "[layout]")
+{
+    CHECK(fmt("@export  -- force export\nresource R {}\n").text ==
+          "@export  -- force export\n"
+          "resource R {\n"
           "}\n");
 }
 

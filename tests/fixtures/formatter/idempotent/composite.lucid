@@ -1,0 +1,18 @@
+@export
+composite Health {
+    input {
+        max: int
+    }
+
+    output {
+        current: int = State.current
+        on_death: Event = dead
+    }
+
+    resource State {
+        current: int = 0
+    }
+
+    node init = SetOnStart(State.current, max)
+    node dead = When(LessNode(State.current, 1))
+}

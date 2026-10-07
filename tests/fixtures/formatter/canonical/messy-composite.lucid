@@ -1,0 +1,6 @@
+composite Health {
+  input { max:int }
+  output { current:int=State.current }
+  resource State { current:int=0 }
+  node init=SetOnStart(State.current,max)
+}

@@ -299,6 +299,8 @@ namespace lucid::formatter
 
             m_writer.write('@');
             m_writer.write(lookup(attr->name));
+
+            drainTrailingComments(attr->loc.line());
             m_writer.newline();
         }
     }
@@ -335,9 +337,17 @@ namespace lucid::formatter
         m_writer.newline();
         m_writer.indent();
 
-        for (InternedString member : node->members)
+        for (EnumMemberAST *member : node->members)
         {
-            m_writer.write(lookup(member));
+            if (!member)
+                continue;
+
+            drainCommentsBefore(member->loc);
+
+            m_writer.write(lookup(member->name));
+            m_writer.write(','); // the comma your fix added
+
+            drainTrailingComments(member->loc.line());
             m_writer.newline();
         }
 

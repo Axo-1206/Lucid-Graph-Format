@@ -84,6 +84,7 @@ add_executable(test_formatter
     formatter/test_indent_writer.cpp
     formatter/test_formatter_api.cpp
     formatter/test_layout_builder.cpp
+    formatter/test_formatter_fixtures.cpp
 )
 
 target_link_libraries(test_formatter PRIVATE
@@ -101,9 +102,12 @@ add_test(NAME formatter COMMAND test_formatter)
 
 # ─── lucid-fixture-regen ─────────────────────────────────────────────────
 #
-# A small tool that regenerates the parser's fixture expected files by
-# running the parser and the dumper on each good/*.lucid file and
-# writing the result to the sibling good/*.json file.
+# Regenerates all fixture expected files:
+#   - parser/good/*.lucid  → *.json   (parse + AST dump)
+#   - formatter/canonical/*.lucid → *.expected  (parse + format)
+#
+# Also verifies formatter idempotence at generation time: if
+# format(format(x)) != format(x), the tool exits non-zero.
 #
 # Run it with:
 #
@@ -118,6 +122,7 @@ add_executable(lucid-fixture-regen
 target_link_libraries(lucid-fixture-regen PRIVATE
     lucid_core
     lucid_parser
+    lucid_formatter
 )
 
 target_compile_definitions(lucid-fixture-regen PRIVATE
@@ -129,6 +134,6 @@ add_custom_target(regen-fixtures
     COMMAND lucid-fixture-regen
     DEPENDS lucid-fixture-regen
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Regenerating parser fixtures"
+    COMMENT "Regenerating parser and formatter fixtures"
     VERBATIM
 )

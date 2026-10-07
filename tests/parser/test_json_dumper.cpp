@@ -100,7 +100,9 @@ TEST_CASE("dumpModule dumps an enum", "[json-dumper]")
     const std::string json = f.dump("enum Key { W, A, S, D }");
     CHECK(json.find(R"("kind":"EnumDecl")") != std::string::npos);
     CHECK(json.find(R"("name":"Key")") != std::string::npos);
-    CHECK(json.find(R"("members":["W","A","S","D"])") != std::string::npos);
+    CHECK(json.find(R"("kind":"EnumMember")") != std::string::npos);
+    CHECK(json.find(R"("name":"W")") != std::string::npos);
+    CHECK(json.find(R"("name":"D")") != std::string::npos);
 }
 
 TEST_CASE("dumpModule dumps an empty enum", "[json-dumper]")

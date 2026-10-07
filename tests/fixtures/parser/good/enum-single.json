@@ -1,1 +1,1 @@
-{"kind":"Module","loc":{"line":1,"col":1},"filePath":"enum-single.lucid","declarations":[{"kind":"EnumDecl","loc":{"line":2,"col":1},"name":"Key","members":["A"],"attributes":[]}]}
+{"kind":"Module","loc":{"line":1,"col":1},"filePath":"enum-single.lucid","declarations":[{"kind":"EnumDecl","loc":{"line":2,"col":1},"name":"Key","members":[{"kind":"EnumMember","loc":{"line":2,"col":12},"name":"A"}],"attributes":[]}]}

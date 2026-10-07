@@ -1,0 +1,3 @@
+resource Player { speed:float=200.0
+hp:int=100
+is_alive:bool }

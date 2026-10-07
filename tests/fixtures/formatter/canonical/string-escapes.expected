@@ -1,0 +1,5 @@
+node a = Foo("line1\nline2")
+
+node b = Foo('x')
+
+node c = Foo('\n')

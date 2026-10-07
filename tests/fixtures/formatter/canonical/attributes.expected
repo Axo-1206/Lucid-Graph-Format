@@ -1,0 +1,4 @@
+@export
+@other
+resource R {
+}

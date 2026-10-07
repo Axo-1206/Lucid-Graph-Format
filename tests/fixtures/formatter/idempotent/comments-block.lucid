@@ -1,0 +1,6 @@
+/- a block comment -/
+import keys
+/- a
+   multi-line
+   block comment -/
+node speed = Float32Node(200.0)

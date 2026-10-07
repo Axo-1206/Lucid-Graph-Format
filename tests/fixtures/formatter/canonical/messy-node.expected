@@ -1,0 +1,3 @@
+node speed = Float32Node(200.0)
+
+node dmg = Damage(body, 10) on on_hit

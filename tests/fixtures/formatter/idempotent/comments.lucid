@@ -1,0 +1,9 @@
+-- leading comment for the import
+import core.keys
+-- leading comment for the resource
+resource Player {
+    -- leading comment for the field
+    hp: int  -- trailing comment for the field
+}
+-- a standalone comment
+node speed = Float32Node(200.0)  -- trailing

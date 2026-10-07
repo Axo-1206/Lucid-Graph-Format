@@ -158,7 +158,7 @@ TEST_CASE("parseEnumDecl parses a single-member enum", "[parse-decl]")
     CHECK_FALSE(node->hasSyntaxError);
     CHECK(f.pool.lookupView(node->name) == std::string_view{"Key"});
     REQUIRE(node->members.size() == 1);
-    CHECK(f.pool.lookupView(node->members[0]) == std::string_view{"A"});
+    CHECK(f.pool.lookupView(node->members[0]->name) == std::string_view{"A"});
 }
 
 TEST_CASE("parseEnumDecl parses a multi-member enum", "[parse-decl]")
@@ -171,8 +171,8 @@ TEST_CASE("parseEnumDecl parses a multi-member enum", "[parse-decl]")
                               });
     REQUIRE(node != nullptr);
     REQUIRE(node->members.size() == 4);
-    CHECK(f.pool.lookupView(node->members[0]) == std::string_view{"W"});
-    CHECK(f.pool.lookupView(node->members[3]) == std::string_view{"D"});
+    CHECK(f.pool.lookupView(node->members[0]->name) == std::string_view{"W"});
+    CHECK(f.pool.lookupView(node->members[3]->name) == std::string_view{"D"});
 }
 
 TEST_CASE("parseEnumDecl parses a trailing comma", "[parse-decl]")
@@ -198,6 +198,23 @@ TEST_CASE("parseEnumDecl reports a missing name", "[parse-decl]")
     CHECK(node == nullptr);
     CHECK(f.diag.hasErrors());
     CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedEnumName);
+}
+
+TEST_CASE("parseEnumDecl records each member's location",
+          "[parse-decl]")
+{
+    Fixture f;
+    EnumDeclAST *node = f.run("enum Key {\n    A,\n    B\n}",
+                              [](TokenStream &s, ParserContext &c)
+                              {
+                                  return parseEnumDecl(s, c);
+                              });
+    REQUIRE(node != nullptr);
+    REQUIRE(node->members.size() == 2);
+    CHECK(node->members[0]->loc.line() == 2);
+    CHECK(node->members[0]->loc.column() == 5);
+    CHECK(node->members[1]->loc.line() == 3);
+    CHECK(node->members[1]->loc.column() == 5);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
