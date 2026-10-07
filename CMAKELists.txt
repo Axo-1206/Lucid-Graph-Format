@@ -181,15 +181,35 @@ if(MSVC)
     target_compile_options(lucid_formatter PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
-# ─── Executable: lucid-fmt ─────────────────────────────────────────────────
+# ─── Library: lucid_cli ───────────────────────────────────────────────────
 
-add_executable(lucid-fmt
-    src/main.cpp
+add_library(lucid_cli STATIC
+    cli/src/cli/CLIOptions.cpp
+    cli/src/cli/commands/Format.cpp
 )
 
-# lucid_formatter PUBLIC-links lucid_parser and lucid_core, so listing
-# only lucid_formatter is enough.
-target_link_libraries(lucid-fmt PRIVATE lucid_formatter)
+target_include_directories(lucid_cli PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/cli/include"
+)
+
+target_link_libraries(lucid_cli PUBLIC
+    lucid_core
+    lucid_parser
+    lucid_formatter
+)
+
+target_compile_options(lucid_cli PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid_cli PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
+# ─── Executable: lucid-fmt ────────────────────────────────────────────────
+
+add_executable(lucid-fmt
+    cli/src/cli/Main.cpp
+)
+
+target_link_libraries(lucid-fmt PRIVATE lucid_cli)
 
 target_compile_options(lucid-fmt PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)

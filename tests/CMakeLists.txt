@@ -137,3 +137,19 @@ add_custom_target(regen-fixtures
     COMMENT "Regenerating parser and formatter fixtures"
     VERBATIM
 )
+
+# ─── test_cli ──────────────────────────────────────────────────────────────
+
+add_executable(test_cli
+    cli/test_cli_options.cpp
+    cli/test_format_command.cpp
+)
+
+target_link_libraries(test_cli PRIVATE
+    lucid_cli
+    Catch2::Catch2WithMain
+)
+
+target_compile_options(test_cli PRIVATE ${LUCID_CXX_WARNINGS})
+
+add_test(NAME cli COMMAND test_cli)
