@@ -82,6 +82,7 @@ add_executable(test_formatter
     formatter/test_formatter_smoke.cpp
     formatter/test_format_options.cpp
     formatter/test_indent_writer.cpp
+    formatter/test_formatter_api.cpp
 )
 
 target_link_libraries(test_formatter PRIVATE

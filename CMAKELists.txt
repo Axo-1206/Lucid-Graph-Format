@@ -160,7 +160,7 @@ endif()
 # ─── Library: lucid_formatter ──────────────────────────────────────────────
 
 add_library(lucid_formatter STATIC
-    formatter/src/formatter/placeholder.cpp
+    formatter/src/formatter/Formatter.cpp
 )
 
 target_include_directories(lucid_formatter
