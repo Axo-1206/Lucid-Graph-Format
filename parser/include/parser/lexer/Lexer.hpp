@@ -1,50 +1,28 @@
-/**
- * @file parser/Lexer.hpp
- *
- * @responsibility Converts one source file's text into a flat token stream,
- *                 interning every token payload through a StringPool.
- *
- * ─── Design: the lexer interns ────────────────────────────────────────────
- * Every token that carries a payload — an identifier, a keyword, a literal,
- * an operator spelling — stores an InternedString, not a std::string. The
- * lexer calls pool.intern() once per distinct payload and stores the 4-byte
- * handle on the token.
- *
- * This matches the AST's own decision: BaseAST.hpp stores InternedString
- * for every name and literal, so interning in the lexer is just extending
- * that decision one layer up. The parser receives handles and stores them
- * directly; it never calls pool.intern() and never holds a std::string.
- *
- * ─── Design: every token's value is valid ─────────────────────────────────
- * Unlike the alternative "punctuation carries an empty value" convention,
- * this lexer interns the punctuation's spelling too. "(" is interned the
- * first time a LPAREN token is produced; every subsequent LPAREN token
- * reuses the same ID. The pool cost is O(distinct tokens), not O(tokens),
- * so a large file with a million parentheses still only interns "(" once.
- *
- * The uniformity buys two things: peekValue() always returns a valid view
- * (no special case for "this token has no spelling"), and Token has one
- * field with one meaning — no "sometimes text, sometimes empty" ambiguity.
- *
- * ─── Design: no conditional keywording ────────────────────────────────────
- * Every keyword in Tokens.hpp is a keyword everywhere. There is no context
- * where "node" is an identifier and no context where "resource" is not a
- * keyword. The parser's dispatch is therefore a pure function of the
- * current token type, with no dependence on surrounding context.
- *
- * ─── Design: errors go through DiagnosticEngine ───────────────────────────
- * The lexer reports errors at the point they are detected. It does not
- * abort: an unknown character is skipped, a malformed literal produces an
- * UNKNOWN token, and lexing continues. The parser sees as much of the
- * program as possible and the user gets more than one error per compile.
- * The final token is always EOF_TOKEN, even on error.
- *
- * ─── Location convention ──────────────────────────────────────────────────
- * Every token carries the source location of its *first character*. A
- * diagnostic at that location points at the start of the offending token.
- * An "unterminated string" diagnostic points at the opening quote, not at
- * end-of-file.
- */
+/// @file parser/lexer/Lexer.hpp
+///
+/// @brief Converts one source file's text into a flat token stream,
+///        with optional comment collection.
+///
+/// ─── Design: the lexer interns ────────────────────────────────────────────
+/// Every token that carries a payload — an identifier, a keyword, a
+/// literal, a punctuation spelling — stores an InternedString, not a
+/// std::string. The lexer calls pool.intern() once per distinct payload
+/// and stores the 4-byte handle on the token.
+///
+/// Comment text is interned the same way, when comments are collected.
+///
+/// ─── Design: comments are collected, not dropped ──────────────────────────
+/// Two entry points:
+///
+///   - `tokenize` — the parser's entry point. Comments are skipped and
+///     discarded; the returned vector contains only tokens.
+///
+///   - `tokenizeWithTrivia` — the formatter's entry point. Comments are
+///     collected into a TriviaBuffer and returned alongside the tokens.
+///
+/// The two share their scanner loop. The difference is that
+/// `tokenizeWithTrivia` passes a non-null `TriviaBuffer*` to the loop,
+/// and the loop appends comment entries to it when it sees them.
 
 #pragma once
 
@@ -53,6 +31,7 @@
 #include "core/diagnostics/Diagnostic.hpp"
 #include "core/memory/InternedString.hpp"
 #include "core/memory/StringPool.hpp"
+#include "core/trivia/TriviaBuffer.hpp"
 
 #include <string_view>
 #include <vector>
@@ -64,25 +43,51 @@ namespace lucid::lexer
     // Public API
     // ─────────────────────────────────────────────────────────────────────────────
 
+    /// @brief The result of tokenizeWithTrivia.
+    ///
+    /// The tokens are the same sequence `tokenize` would produce: every
+    /// token is present, the final token is EOF_TOKEN, and error tokens
+    /// (UNKNOWN) appear where the lexer recovered.
+    ///
+    /// The trivia is the sequence of comments the lexer encountered, in
+    /// source order. It is empty when there were no comments.
+    struct TokenizeResult
+    {
+        std::vector<Token> tokens;
+        trivia::TriviaBuffer trivia;
+    };
+
     /// @brief Tokenize a source file into a flat token stream.
     ///
-    /// Every token's `value` field is an InternedString owned by `pool`. The
-    /// final token is always EOF_TOKEN, even on error.
+    /// Comments are skipped and discarded. Every token's `value` field
+    /// is an InternedString owned by `pool`. The final token is always
+    /// EOF_TOKEN, even on error.
     ///
-    /// The lexer reports errors through `diagnostics`. It does not abort on
-    /// error; an unrecoverable malformed construct produces an UNKNOWN token
-    /// and lexing continues, so the parser sees the rest of the file.
+    /// The lexer reports errors through `diagnostics`. It does not
+    /// abort on error; an unrecoverable malformed construct produces
+    /// an UNKNOWN token and lexing continues.
+    ///
+    /// Use this when comments are not needed. The parser uses it; the
+    /// formatter uses `tokenizeWithTrivia`.
     std::vector<Token> tokenize(std::string_view source,
                                 StringPool &pool,
                                 lucid::diag::DiagnosticEngine &diagnostics);
 
+    /// @brief Tokenize a source file, collecting comments into a buffer.
+    ///
+    /// Same token stream as `tokenize`. Additionally, every comment the
+    /// lexer encounters is appended to the returned `TriviaBuffer`, in
+    /// source order, with its content interned.
+    ///
+    /// Use this when comments are needed. The formatter uses it.
+    TokenizeResult tokenizeWithTrivia(std::string_view source,
+                                      StringPool &pool,
+                                      lucid::diag::DiagnosticEngine &diagnostics);
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Character classification
     // ─────────────────────────────────────────────────────────────────────────────
-    //
-    // Exposed because the parser's lookahead helpers and any future tool that
-    // scans raw source (a syntax highlighter, a minifier) both want them, and
-    // duplicating them invites drift.
+    // (unchanged from the current header)
 
     inline bool isIdentifierStart(char c) noexcept
     {

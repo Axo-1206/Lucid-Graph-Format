@@ -1,24 +1,21 @@
-/**
- * @file parser/lexer/Lexer.cpp
- *
- * @brief Implementation of the Lucid lexer.
- *
- * ─── Structure of this file ───────────────────────────────────────────────
- *   1. LexerState — the cursor and the diagnostic sink
- *   2. Cursor primitives (advance, peek, match)
- *   3. Token construction
- *   4. The keyword table
- *   5. Comment scanners (line, block)
- *   6. Literal scanners (identifier, number, string, char)
- *   7. Punctuation scanner
- *   8. The dispatch (lexOne) and the public entry point
- *
- * ─── The cursor ───────────────────────────────────────────────────────────
- * The lexer maintains (position, line, column). Only `advance()` moves
- * them, and it moves all three together so they can never disagree. Every
- * token constructor captures the cursor's location *before* the token's
- * first character is consumed.
- */
+/// @file parser/src/parser/lexer/Lexer.cpp
+///
+/// @brief Implementation of the Lucid lexer.
+///
+/// ─── Structure of this file ───────────────────────────────────────────────
+///   1. LexerState — the cursor, the diagnostic sink, the trivia sink
+///   2. Cursor primitives (advance, peek, match)
+///   3. Token construction
+///   4. The keyword table
+///   5. Comment scanners (line, block)
+///   6. Literal scanners (identifier, number, string, char)
+///   7. Punctuation scanner
+///   8. The dispatch (lexOne) and the public entry points
+///
+/// ─── The trivia sink ──────────────────────────────────────────────────────
+/// LexerState has an optional pointer to a TriviaBuffer. When non-null,
+/// comments are appended to it. When null, comments are discarded.
+/// tokenize passes null; tokenizeWithTrivia passes a real buffer.
 
 #include "parser/lexer/Lexer.hpp"
 
@@ -36,7 +33,6 @@ namespace lucid::lexer
     // 1. LexerState
     // =============================================================================
 
-    /// @brief The cursor, the pool, and the diagnostic sink.
     struct LexerState
     {
         std::string_view source;
@@ -44,19 +40,24 @@ namespace lucid::lexer
         lucid::diag::DiagnosticEngine &diagnostics;
         std::vector<Token> tokens;
 
-        size_t position = 0; // byte offset into source
-        uint32_t line = 1;   // 1-indexed
-        uint32_t column = 1; // 1-indexed
+        /// Optional sink for comments. Null means "discard comments."
+        trivia::TriviaBuffer *triviaSink = nullptr;
+
+        size_t position = 0;
+        uint32_t line = 1;
+        uint32_t column = 1;
 
         LexerState(std::string_view src,
                    StringPool &p,
-                   lucid::diag::DiagnosticEngine &diag)
-            : source(src), pool(p), diagnostics(diag) {}
+                   lucid::diag::DiagnosticEngine &diag,
+                   trivia::TriviaBuffer *trivia)
+            : source(src), pool(p), diagnostics(diag), triviaSink(trivia) {}
     };
 
     // =============================================================================
     // 2. Cursor primitives
     // =============================================================================
+    // (unchanged)
 
     namespace
     {
@@ -107,7 +108,6 @@ namespace lucid::lexer
     namespace
     {
 
-        /// @brief Build a token. The payload is already interned.
         Token makeToken(TokenType type,
                         InternedString value,
                         SourceLocation location)
@@ -115,7 +115,6 @@ namespace lucid::lexer
             return Token{type, value, location};
         }
 
-        /// @brief Build a token from a raw lexeme, interning it through the pool.
         Token makeTokenFromLexeme(LexerState &s,
                                   TokenType type,
                                   std::string_view lexeme,
@@ -123,16 +122,6 @@ namespace lucid::lexer
         {
             return Token{type, s.pool.intern(lexeme), location};
         }
-
-        // ─── Diagnostics ──────────────────────────────────────────────────────────
-        //
-        // Every diagnostic takes an explicit location. The two helpers below exist
-        // so the call sites read cleanly:
-        //
-        //   reportAt — the diagnostic is about the current cursor position.
-        //   reportErrorAt — the diagnostic is about a location captured earlier
-        //                   (the opening quote of an unterminated string, for
-        //                   instance).
 
         void reportAt(LexerState &s, DiagCode code, std::string message)
         {
@@ -152,26 +141,13 @@ namespace lucid::lexer
     // =============================================================================
     // 4. The keyword table
     // =============================================================================
-    //
-    // This is the entire set of words the lexer recognizes as anything other
-    // than IDENTIFIER. It has nine entries. Every entry corresponds to a KW_*
-    // value in Tokens.hpp.
-    //
-    // A linear scan over string_views. Nine entries, one comparison per entry
-    // on a miss; the branch predictor handles it well because most identifiers
-    // share prefixes with at most a few keywords. If this ever shows up in a
-    // profile, the fix is a perfect hash — not now.
-    //
-    // `as` is deliberately absent: the grammar's §1.2 does not list it, and
-    // §5's lexer sketch omits it. The parser matches it by spelling. If that
-    // decision changes, this is the one table to edit.
+    // (unchanged)
 
     namespace
     {
 
         TokenType keywordToType(std::string_view word) noexcept
         {
-            // ─── Declaration keywords ───────────────────────────────────────────
             if (word == "import")
                 return TokenType::KW_IMPORT;
             if (word == "from")
@@ -184,25 +160,18 @@ namespace lucid::lexer
                 return TokenType::KW_NODE;
             if (word == "composite")
                 return TokenType::KW_COMPOSITE;
-
-            // ─── Composite-body keywords ────────────────────────────────────────
             if (word == "on")
                 return TokenType::KW_ON;
             if (word == "input")
                 return TokenType::KW_INPUT;
             if (word == "output")
                 return TokenType::KW_OUTPUT;
-
-            // ─── Literal keywords ───────────────────────────────────────────────
-            // `true` and `false` both produce BOOL_LITERAL; the token's payload
-            // distinguishes them. `nil` produces NIL_LITERAL.
             if (word == "true")
                 return TokenType::BOOL_LITERAL;
             if (word == "false")
                 return TokenType::BOOL_LITERAL;
             if (word == "nil")
                 return TokenType::NIL_LITERAL;
-
             return TokenType::IDENTIFIER;
         }
 
@@ -228,34 +197,34 @@ namespace lucid::lexer
     // 5. Comments
     // =============================================================================
     //
-    // Two forms:
-    //
-    //   -- ...           line comment; dropped, no token.
-    //   /- ... -/        block comment; nestable; dropped, no token.
-    //
-    // The block-comment opener is /- (two chars); its closer is -/ (two). A
-    // block comment nests: a nested /- ... -/ inside it must be consumed
-    // before the outer -/ can close it.
-    //
-    // There is no separate doc-comment form. `/--` is `/-` followed by `-`;
-    // the block-comment scanner sees the opener, then a literal `-`. That is
-    // consistent with the grammar, which lists only line and block comments.
+    // The two scanners return the comment's content as a std::string_view
+    // into the source. The caller (lexOne) decides whether to intern it
+    // and append to the trivia sink, or to discard it.
 
     namespace
     {
 
-        /// @brief Consume a line comment. The leading `--` has been consumed.
-        void skipLineComment(LexerState &s) noexcept
+        /// Consume a line comment. The leading `--` has been consumed.
+        /// Returns the content between `--` and the newline (or end of
+        /// input). Does not consume the newline.
+        std::string_view skipLineComment(LexerState &s) noexcept
         {
+            const size_t start = s.position;
             while (!isAtEnd(s) && currentChar(s) != '\n')
+            {
                 advance(s);
+            }
+            return s.source.substr(start, s.position - start);
         }
 
-        /// @brief Consume a nestable block comment. The leading `/-` has been consumed.
-        /// @param terminated  Set to true if a matching `-/` was found.
-        void readBlockComment(LexerState &s, bool &terminated)
+        /// Consume a nestable block comment. The leading `/-` has been
+        /// consumed. Returns the content between `/-` and the matching
+        /// `-/`, with internal newlines preserved. `terminated` is set
+        /// to true if a matching `-/` was found.
+        std::string_view readBlockComment(LexerState &s, bool &terminated)
         {
             terminated = false;
+            const size_t start = s.position;
             int depth = 1;
 
             while (!isAtEnd(s))
@@ -270,17 +239,24 @@ namespace lucid::lexer
                 if (currentChar(s) == '-' && peekChar(s, 1) == '/')
                 {
                     depth--;
-                    advance(s);
-                    advance(s);
                     if (depth == 0)
                     {
+                        // The content ends before the closing `-/`.
+                        const size_t end = s.position;
+                        advance(s);
+                        advance(s);
                         terminated = true;
-                        return;
+                        return s.source.substr(start, end - start);
                     }
+                    advance(s);
+                    advance(s);
                     continue;
                 }
                 advance(s);
             }
+
+            // Unterminated: return what we have.
+            return s.source.substr(start, s.position - start);
         }
 
     } // namespace
@@ -288,18 +264,12 @@ namespace lucid::lexer
     // =============================================================================
     // 6. Literal scanners
     // =============================================================================
+    // (unchanged, except that readEscape needs to be visible to the char
+    // and string lexers — it is unchanged)
 
     namespace
     {
 
-        // ─── Identifiers and keywords ─────────────────────────────────────────────
-
-        /// @brief Lex an identifier or a keyword.
-        ///
-        /// The lexeme is interned once, whether the token is a keyword or an
-        /// identifier. Keyword spellings are canonical strings ("node", "on"), so
-        /// the pool ends up with one ID per keyword regardless of how many times
-        /// each appears.
         void lexIdentifier(LexerState &s)
         {
             const SourceLocation startLoc = currentLocation(s);
@@ -317,38 +287,16 @@ namespace lucid::lexer
             s.tokens.push_back(makeTokenFromLexeme(s, type, word, startLoc));
         }
 
-        // ─── Numbers ──────────────────────────────────────────────────────────────
-        //
-        // The lexer produces raw lexemes; it does not parse the number. `0xFF` is
-        // a INT_LITERAL whose value is the interned string "0xFF". The parser or
-        // Sema interprets the lexeme.
-        //
-        // A numeric literal may have a leading `-`. The sign is part of the token.
-        // There is no MINUS token and no unary-minus parse rule: the format has
-        // no operators. A `-` that is not immediately followed by a digit is not
-        // part of a number and is reported as an unknown character.
-        //
-        // The `.` disambiguation: the number lexer is entered only when the
-        // first character is a digit or a `-` followed by a digit. A `.` is
-        // always DOT, even when followed by a digit: the grammar's FLOAT_LIT
-        // requires a digit before the `.`. Inside the number lexer, a `.`
-        // is part of a float only when the next character is a digit.
-
         void lexNumber(LexerState &s)
         {
             const SourceLocation startLoc = currentLocation(s);
             const size_t startPos = s.position;
 
-            // Optional leading sign. A `-` reaching here is always followed by
-            // a digit — the dispatch in lexOne only routes `-` to lexNumber when
-            // the next character is a digit. The sign is captured in the lexeme
-            // because the lexeme is taken from startPos to s.position.
             if (currentChar(s) == '-')
             {
                 advance(s);
             }
 
-            // Radix prefixes: 0x, 0b, 0o (case-insensitive).
             if (currentChar(s) == '0')
             {
                 const char next = peekChar(s, 1);
@@ -359,10 +307,11 @@ namespace lucid::lexer
                                     const char *name)
                 {
                     advance(s);
-                    advance(s); // consume `0x` / `0b` / `0o`
+                    advance(s);
                     if (!isDigitFn(currentChar(s)))
                     {
-                        reportErrorAt(s, DiagCode::Lex_InvalidRadixLiteral, startLoc,
+                        reportErrorAt(s, DiagCode::Lex_InvalidRadixLiteral,
+                                      startLoc,
                                       std::string(name) +
                                           " literal has no digits after '0" +
                                           std::string(1, lower) + "'");
@@ -382,38 +331,37 @@ namespace lucid::lexer
 
                 if (next == 'x' || next == 'X')
                 {
-                    lexRadix('x', isHexDigit, TokenType::INT_LITERAL, "hexadecimal");
+                    lexRadix('x', isHexDigit, TokenType::INT_LITERAL,
+                             "hexadecimal");
                     return;
                 }
                 if (next == 'b' || next == 'B')
                 {
-                    lexRadix('b', isBinDigit, TokenType::INT_LITERAL, "binary");
+                    lexRadix('b', isBinDigit, TokenType::INT_LITERAL,
+                             "binary");
                     return;
                 }
                 if (next == 'o' || next == 'O')
                 {
-                    lexRadix('o', isOctDigit, TokenType::INT_LITERAL, "octal");
+                    lexRadix('o', isOctDigit, TokenType::INT_LITERAL,
+                             "octal");
                     return;
                 }
             }
 
-            // Decimal integer part.
             while (isDigit(currentChar(s)))
                 advance(s);
 
             bool isFloat = false;
 
-            // Fractional part: `.` followed by a digit. A bare `.` is not part of
-            // the number — `1.field` lexes as INT_LITERAL(1), DOT, IDENTIFIER.
             if (currentChar(s) == '.' && isDigit(peekChar(s, 1)))
             {
                 isFloat = true;
-                advance(s); // `.`
+                advance(s);
                 while (isDigit(currentChar(s)))
                     advance(s);
             }
 
-            // Exponent part.
             if (currentChar(s) == 'e' || currentChar(s) == 'E')
             {
                 isFloat = true;
@@ -422,8 +370,8 @@ namespace lucid::lexer
                     advance(s);
                 if (!isDigit(currentChar(s)))
                 {
-                    reportErrorAt(s, DiagCode::Lex_InvalidNumberLiteral, startLoc,
-                                  "exponent has no digits");
+                    reportErrorAt(s, DiagCode::Lex_InvalidNumberLiteral,
+                                  startLoc, "exponent has no digits");
                     s.tokens.push_back(makeTokenFromLexeme(
                         s, TokenType::UNKNOWN,
                         s.source.substr(startPos, s.position - startPos),
@@ -441,30 +389,15 @@ namespace lucid::lexer
                 startLoc));
         }
 
-        // ─── Escape processing ────────────────────────────────────────────────────
-        //
-        // One function, shared by the string lexer and the char lexer. Resolves
-        // the escape sequence to its actual character. The two callers diverge in
-        // only one way: a string may contain a NUL (`'\0'`), which it appends to
-        // its content; a char whose value is 0 is a legal char whose value is 0.
-        // Both callers use the same resolved byte.
-        //
-        // On an invalid escape, the function reports the diagnostic, consumes
-        // the offending character, and returns false. The caller decides
-        // whether to bail out of the literal or continue.
-
-        /// @brief Consume the `\` and the following escape character. Append the
-        ///        resolved byte to `out`. Returns false if the escape is invalid
-        ///        or the input ended mid-escape; in that case a diagnostic has
-        ///        been reported at `escapeLoc`.
-        bool readEscape(LexerState &s, std::string &out, SourceLocation escapeLoc)
+        bool readEscape(LexerState &s,
+                        std::string &out,
+                        SourceLocation escapeLoc)
         {
-            advance(s); // consume `\`
-
+            advance(s);
             if (isAtEnd(s))
             {
-                reportErrorAt(s, DiagCode::Lex_InvalidEscapeSequence, escapeLoc,
-                              "unterminated escape sequence");
+                reportErrorAt(s, DiagCode::Lex_InvalidEscapeSequence,
+                              escapeLoc, "unterminated escape sequence");
                 return false;
             }
 
@@ -500,38 +433,18 @@ namespace lucid::lexer
                 advance(s);
                 return true;
             default:
-                reportErrorAt(s, DiagCode::Lex_InvalidEscapeSequence, escapeLoc,
+                reportErrorAt(s, DiagCode::Lex_InvalidEscapeSequence,
+                              escapeLoc,
                               std::string("unknown escape '\\") + next + "'");
-                advance(s); // consume the offending character
+                advance(s);
                 return false;
             }
         }
 
-        // ─── Strings ──────────────────────────────────────────────────────────────
-        //
-        // One form:
-        //
-        //   "..."        normal string; escapes processed; no literal newline.
-        //
-        // The grammar has no raw-string form and no string interpolation.
-        //
-        // An invalid escape does not abort the string. The string lexer
-        // continues reading to the closing `"`, tracking a `hadError` flag.
-        // At the closing quote, it produces UNKNOWN if the flag is set,
-        // STRING_LITERAL otherwise. The whole `"..."` is one token, so the
-        // outer loop never sees a partial string.
-        //
-        // A literal newline is different: it means the string was not
-        // terminated on its line. There is no way to consume the rest of
-        // the string without swallowing the next line's content, so the
-        // lexer bails out at the newline and produces UNKNOWN.
-
-        /// @brief Lex a normal string. The cursor is on the opening `"`.
         void lexString(LexerState &s)
         {
             const SourceLocation startLoc = currentLocation(s);
-
-            advance(s); // opening `"`
+            advance(s);
 
             std::string content;
             bool hadError = false;
@@ -542,10 +455,11 @@ namespace lucid::lexer
 
                 if (c == '"')
                 {
-                    advance(s); // closing `"`
+                    advance(s);
                     s.tokens.push_back(makeTokenFromLexeme(
                         s,
-                        hadError ? TokenType::UNKNOWN : TokenType::STRING_LITERAL,
+                        hadError ? TokenType::UNKNOWN
+                                 : TokenType::STRING_LITERAL,
                         content, startLoc));
                     return;
                 }
@@ -556,7 +470,7 @@ namespace lucid::lexer
                                   "a string literal cannot contain a newline");
                     s.tokens.push_back(makeTokenFromLexeme(
                         s, TokenType::UNKNOWN, content, startLoc));
-                    return; // do NOT consume the newline; let the parser see it
+                    return;
                 }
 
                 if (c == '\\')
@@ -578,24 +492,10 @@ namespace lucid::lexer
                 s, TokenType::UNKNOWN, content, startLoc));
         }
 
-        // ─── Character literals ───────────────────────────────────────────────────
-        //
-        // A char literal is exactly one character or one escape sequence between
-        // single quotes. Escapes resolve to their actual byte, matching the string
-        // lexer. `'\n'` is a CHAR_LITERAL whose value is the interned one-byte
-        // string "\n" (the actual newline), not "\\n".
-        //
-        // The lexer consumes the entire `'...'` sequence as one token, even
-        // when the content is malformed. This matters for a newline in the
-        // middle: if the lexer bailed at the newline, the closing quote would
-        // be seen as the start of a new char literal, producing a second
-        // spurious diagnostic.
-
         void lexChar(LexerState &s)
         {
             const SourceLocation startLoc = currentLocation(s);
-
-            advance(s); // opening `'`
+            advance(s);
 
             std::string value;
             bool hadError = false;
@@ -614,11 +514,8 @@ namespace lucid::lexer
 
                 if (c == '\n')
                 {
-                    // A newline inside a char literal is an error. The
-                    // lexer keeps reading until the closing quote or
-                    // end-of-input, so the whole `'...` is consumed as one
-                    // malformed token.
-                    reportErrorAt(s, DiagCode::Lex_UnterminatedCharLiteral, startLoc,
+                    reportErrorAt(s, DiagCode::Lex_UnterminatedCharLiteral,
+                                  startLoc,
                                   "character literal cannot contain a newline");
                     hadError = true;
                     advance(s);
@@ -641,12 +538,12 @@ namespace lucid::lexer
                 }
                 else
                 {
-                    // More than one character of content. Report once
-                    // and keep consuming until the closing quote.
                     if (!hadError)
                     {
-                        reportErrorAt(s, DiagCode::Lex_UnterminatedCharLiteral, startLoc,
-                                      "character literal contains more than one character");
+                        reportErrorAt(s, DiagCode::Lex_UnterminatedCharLiteral,
+                                      startLoc,
+                                      "character literal contains more than "
+                                      "one character");
                         hadError = true;
                     }
                     advance(s);
@@ -655,8 +552,8 @@ namespace lucid::lexer
 
             if (!sawClosing)
             {
-                reportErrorAt(s, DiagCode::Lex_UnterminatedCharLiteral, startLoc,
-                              "unterminated character literal");
+                reportErrorAt(s, DiagCode::Lex_UnterminatedCharLiteral,
+                              startLoc, "unterminated character literal");
                 hadError = true;
             }
 
@@ -671,14 +568,7 @@ namespace lucid::lexer
     // =============================================================================
     // 7. Punctuation
     // =============================================================================
-    //
-    // Every punctuation token's value is the punctuation's spelling, interned.
-    // This is a deliberate uniformity choice: a token's value field is always
-    // valid, so peekValue() never has to special-case "this token has no
-    // spelling". The pool cost is one ID per distinct punctuation, not one per
-    // occurrence.
-    //
-    // There are no compound operators. Each punctuation is one character.
+    // (unchanged)
 
     namespace
     {
@@ -736,7 +626,6 @@ namespace lucid::lexer
                 return;
             }
 
-            // ─── Unknown character ──────────────────────────────────────────────
             reportErrorAt(s, DiagCode::Lex_UnknownCharacter, startLoc,
                           std::string("unexpected character '") + c + "'");
             advance(s);
@@ -747,21 +636,34 @@ namespace lucid::lexer
     } // namespace
 
     // =============================================================================
-    // 8. The dispatch and the public entry point
+    // 8. The dispatch and the public entry points
     // =============================================================================
 
     namespace
     {
 
-        /// @brief Lex one token. The main loop calls this until EOF.
+        /// Emit a comment as trivia, if the lexer has a sink. Interning
+        /// happens here, at most once per comment.
+        void emitTrivia(LexerState &s,
+                        trivia::TriviaKind kind,
+                        std::string_view content,
+                        SourceLocation loc)
+        {
+            if (!s.triviaSink)
+                return;
+            s.triviaSink->add(trivia::Trivia{
+                kind,
+                s.pool.intern(content),
+                loc,
+            });
+        }
+
         void lexOne(LexerState &s)
         {
             skipWhitespace(s);
 
             if (isAtEnd(s))
             {
-                // Intern "" once; the pool maps it to ID 0, which is what a
-                // default-constructed InternedString holds, so this is free.
                 s.tokens.push_back(makeToken(TokenType::EOF_TOKEN,
                                              InternedString{},
                                              currentLocation(s)));
@@ -771,51 +673,45 @@ namespace lucid::lexer
             const char c = currentChar(s);
             const char next = peekChar(s, 1);
 
-            // ─── Comments ───────────────────────────────────────────────────────
-            //
-            // Order matters. `--` (line comment) and `/-` (block comment) start
-            // with different characters, so their order in the chain does not
-            // interact. There is no `//` form: `//` is not a comment in this
-            // grammar.
-
+            // ─── Line comment ──────────────────────────────────────────────
             if (c == '-' && next == '-')
             {
+                const SourceLocation startLoc = currentLocation(s);
                 advance(s);
                 advance(s); // consume `--`
-                skipLineComment(s);
-                return; // line comments are dropped
+                const std::string_view content = skipLineComment(s);
+                emitTrivia(s, trivia::TriviaKind::LineComment,
+                           content, startLoc);
+                return;
             }
 
+            // ─── Block comment ─────────────────────────────────────────────
             if (c == '/' && next == '-')
             {
                 const SourceLocation startLoc = currentLocation(s);
                 advance(s);
                 advance(s); // consume `/-`
                 bool terminated = false;
-                readBlockComment(s, terminated);
+                const std::string_view content = readBlockComment(s, terminated);
+                emitTrivia(s, trivia::TriviaKind::BlockComment,
+                           content, startLoc);
                 if (!terminated)
                 {
-                    reportErrorAt(s, DiagCode::Lex_UnterminatedBlockComment, startLoc,
+                    reportErrorAt(s, DiagCode::Lex_UnterminatedBlockComment,
+                                  startLoc,
                                   "unterminated block comment (expected -/)");
                 }
-                return; // block comments are dropped
+                return;
             }
 
-            // ─── Identifiers and keywords ───────────────────────────────────────
+            // ─── Identifiers and keywords ──────────────────────────────────
             if (isIdentifierStart(c))
             {
                 lexIdentifier(s);
                 return;
             }
 
-            // ─── Numbers ────────────────────────────────────────────────────────
-            // A `-` immediately followed by a digit starts a signed number.
-            // A digit starts an unsigned number. A `.` is always DOT, even
-            // when followed by a digit: the grammar's FLOAT_LIT requires a
-            // digit before the `.`, so a leading `.` cannot begin a float.
-            //
-            // `--` and `/-` are matched above this block, so a `-` that
-            // reaches here is not part of a comment.
+            // ─── Numbers ───────────────────────────────────────────────────
             if (c == '-' && isDigit(next))
             {
                 lexNumber(s);
@@ -827,22 +723,41 @@ namespace lucid::lexer
                 return;
             }
 
-            // ─── Strings ────────────────────────────────────────────────────────
+            // ─── Strings ───────────────────────────────────────────────────
             if (c == '"')
             {
                 lexString(s);
                 return;
             }
 
-            // ─── Char literal ───────────────────────────────────────────────────
+            // ─── Char literal ──────────────────────────────────────────────
             if (c == '\'')
             {
                 lexChar(s);
                 return;
             }
 
-            // ─── Punctuation ────────────────────────────────────────────────────
+            // ─── Punctuation ───────────────────────────────────────────────
             lexPunctuation(s);
+        }
+
+        /// The shared implementation. `trivia` may be null.
+        LexerState runTokenizer(std::string_view source,
+                                StringPool &pool,
+                                lucid::diag::DiagnosticEngine &diagnostics,
+                                trivia::TriviaBuffer *trivia)
+        {
+            LexerState s(source, pool, diagnostics, trivia);
+            while (true)
+            {
+                lexOne(s);
+                if (!s.tokens.empty() &&
+                    s.tokens.back().type == TokenType::EOF_TOKEN)
+                {
+                    break;
+                }
+            }
+            return s;
         }
 
     } // namespace
@@ -851,19 +766,17 @@ namespace lucid::lexer
                                 StringPool &pool,
                                 lucid::diag::DiagnosticEngine &diagnostics)
     {
-        LexerState s(source, pool, diagnostics);
-
-        while (true)
-        {
-            lexOne(s);
-            if (!s.tokens.empty() &&
-                s.tokens.back().type == TokenType::EOF_TOKEN)
-            {
-                break;
-            }
-        }
-
+        LexerState s = runTokenizer(source, pool, diagnostics, nullptr);
         return std::move(s.tokens);
+    }
+
+    TokenizeResult tokenizeWithTrivia(std::string_view source,
+                                      StringPool &pool,
+                                      lucid::diag::DiagnosticEngine &diagnostics)
+    {
+        trivia::TriviaBuffer buffer;
+        LexerState s = runTokenizer(source, pool, diagnostics, &buffer);
+        return TokenizeResult{std::move(s.tokens), std::move(buffer)};
     }
 
 } // namespace lucid::lexer

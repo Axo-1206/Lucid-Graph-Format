@@ -29,6 +29,7 @@ add_executable(test_core
     core/test_value_ast.cpp
     core/test_decl_ast.cpp
     core/test_module_ast.cpp
+    core/test_trivia.cpp
 )
 
 target_link_libraries(test_core PRIVATE
@@ -60,6 +61,7 @@ add_executable(test_parser
     parser/test_json_writer.cpp
     parser/test_json_dumper.cpp
     parser/test_fixtures.cpp
+    parser/test_tokenize_with_trivia.cpp
 )
 
 target_link_libraries(test_parser PRIVATE
