@@ -161,6 +161,7 @@ endif()
 
 add_library(lucid_formatter STATIC
     formatter/src/formatter/Formatter.cpp
+    formatter/src/formatter/LayoutBuilder.cpp
 )
 
 target_include_directories(lucid_formatter

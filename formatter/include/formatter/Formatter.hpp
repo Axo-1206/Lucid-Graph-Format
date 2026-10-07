@@ -112,7 +112,7 @@ namespace lucid::formatter
     /// @return The formatted text.
     std::string formatModule(const ModuleAST *module,
                              std::string_view source,
-                             const StringPool &pool,
+                             StringPool &pool,
                              FormatOptions options = {});
 
 } // namespace lucid::formatter
