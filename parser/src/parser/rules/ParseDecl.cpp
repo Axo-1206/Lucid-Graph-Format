@@ -61,7 +61,7 @@ namespace lucid::parser
             return parseCompositeDecl(stream, ctx);
         default:
             // The caller has already checked canStartTopDecl (or the
-            // composite-body equivalent). Reaching here is a caller bug,
+            // composite-body equivalent). parseEnumMemberList here is a caller bug,
             // not a user error. Report internally and return nullptr so
             // the caller's loop can recover.
             ctx.diag.errorAt(DiagCode::Internal_Assertion,
@@ -195,25 +195,25 @@ namespace lucid::parser
             return nullptr;
         }
 
-        ArenaSpan<InternedString> members = parseEnumMemberList(stream, ctx);
+        ArenaSpan<EnumMemberAST *> members = parseEnumMemberList(stream, ctx);
 
         EnumDeclAST *node = ctx.arena.make<EnumDeclAST>(name, members);
         node->loc = startLoc;
         return node;
     }
 
-    ArenaSpan<InternedString> parseEnumMemberList(TokenStream &stream,
-                                                  ParserContext &ctx)
+    ArenaSpan<EnumMemberAST *> parseEnumMemberList(TokenStream &stream,
+                                                   ParserContext &ctx)
     {
         // The caller has consumed `{`. If the next token is `}`, the
-        // list is empty (which Sema may later reject as a warning).
+        // list is empty.
         if (stream.check(TokenType::RBRACE))
         {
             stream.consume();
             return {};
         }
 
-        auto builder = ctx.arena.makeBuilder<InternedString>();
+        auto builder = ctx.arena.makeBuilder<EnumMemberAST *>();
 
         // ─── First member ──────────────────────────────────────────────────
         if (!stream.check(TokenType::IDENTIFIER))
@@ -221,13 +221,20 @@ namespace lucid::parser
             ctx.diag.errorAt(DiagCode::Syntax_ExpectedEnumMember,
                              stream.currentLoc(),
                              "expected an enum member name");
-            // Fall through: try to consume the closing `}`.
             stream.match(TokenType::RBRACE);
             return builder.build();
         }
 
-        builder.push_back(stream.peekValue());
-        stream.consume();
+        {
+            const SourceLocation memberLoc = stream.currentLoc();
+            const InternedString name = stream.peekValue();
+            stream.consume();
+
+            EnumMemberAST *member =
+                ctx.arena.make<EnumMemberAST>(name);
+            member->loc = memberLoc;
+            builder.push_back(member);
+        }
 
         // ─── Subsequent members ────────────────────────────────────────────
         while (stream.match(TokenType::COMMA))
@@ -246,8 +253,14 @@ namespace lucid::parser
                 break;
             }
 
-            builder.push_back(stream.peekValue());
+            const SourceLocation memberLoc = stream.currentLoc();
+            const InternedString name = stream.peekValue();
             stream.consume();
+
+            EnumMemberAST *member =
+                ctx.arena.make<EnumMemberAST>(name);
+            member->loc = memberLoc;
+            builder.push_back(member);
         }
 
         // ─── The closing `}` ───────────────────────────────────────────────

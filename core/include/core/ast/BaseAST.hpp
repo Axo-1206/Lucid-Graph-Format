@@ -71,6 +71,7 @@ struct InlineNodeValueAST;
 struct DeclAST;
 struct ImportDeclAST;
 struct EnumDeclAST;
+struct EnumMemberAST;
 struct ResourceDeclAST;
 struct ResourceFieldAST;
 struct NodeDeclAST;
@@ -125,6 +126,7 @@ enum class ASTKind : uint16_t
     Decl, // family base
     ImportDecl,
     EnumDecl,
+    EnumMember,
     ResourceDecl,
     ResourceField,
     NodeDecl,
@@ -179,6 +181,7 @@ AST_KIND_OF(InlineNodeValueAST, InlineNodeValue);
 AST_KIND_OF(DeclAST, Decl);
 AST_KIND_OF(ImportDeclAST, ImportDecl);
 AST_KIND_OF(EnumDeclAST, EnumDecl);
+AST_KIND_OF(EnumMemberAST, EnumMember);
 AST_KIND_OF(ResourceDeclAST, ResourceDecl);
 AST_KIND_OF(ResourceFieldAST, ResourceField);
 AST_KIND_OF(NodeDeclAST, NodeDecl);

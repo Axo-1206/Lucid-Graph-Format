@@ -343,7 +343,7 @@ namespace lucid::parser
     /// Error behavior: partial-parse. If a member is missing between commas,
     /// reports a diagnostic and skips it. If the closing `}` is missing,
     /// reports and returns the members that were read.
-    ArenaSpan<InternedString> parseEnumMemberList(TokenStream &stream,
-                                                  ParserContext &ctx);
+    ArenaSpan<EnumMemberAST *> parseEnumMemberList(TokenStream &stream,
+                                                   ParserContext &ctx);
 
 } // namespace lucid::parser

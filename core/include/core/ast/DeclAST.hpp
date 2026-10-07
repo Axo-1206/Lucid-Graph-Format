@@ -108,6 +108,37 @@ struct ImportDeclAST : DeclAST
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EnumMemberAST
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// @brief One member of an enum declaration.
+///
+/// The grammar's §2.4 writes:
+///
+///     enum_member_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
+///
+/// Each member is its own node so that it can carry a source location.
+/// The location is what the formatter uses to interleave comments
+/// between members, and what the LSP will use to answer hover and
+/// go-to-definition for a member.
+///
+/// Before this node existed, `EnumDeclAST::members` was a span of
+/// InternedString. Without a location per member, a comment between two
+/// members had nowhere to attach and was drained at the next top-level
+/// construct.
+struct EnumMemberAST : BaseAST
+{
+    static constexpr ASTKind staticKind = ASTKind::EnumMember;
+
+    InternedString name;
+
+    EnumMemberAST() : BaseAST(ASTKind::EnumMember) {}
+
+    explicit EnumMemberAST(InternedString n)
+        : BaseAST(ASTKind::EnumMember), name(n) {}
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EnumDeclAST
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -118,23 +149,19 @@ struct ImportDeclAST : DeclAST
 ///     enum_decl ::= 'enum' IDENTIFIER '{' enum_member_list '}'
 ///     enum_member_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
 ///
-/// Members are an ordered span of names. The parser does not check for
-/// duplicates; Sema reports a duplicate member as `Name_DuplicateEnumMember`.
-///
-/// The grammar notes (§2.4) that enum declarations are "typically
-/// host-provided" and that the host registry treats them as authoritative.
-/// A script-declared enum whose name is not in the registry is a Sema
-/// concern, not a parser concern; the parser accepts the syntax.
+/// Members are an ordered span of EnumMemberAST. The parser does not
+/// check for duplicates; Sema reports a duplicate member as
+/// `Name_DuplicateEnumMember`.
 struct EnumDeclAST : DeclAST
 {
     static constexpr ASTKind staticKind = ASTKind::EnumDecl;
 
-    ArenaSpan<InternedString> members;
+    ArenaSpan<EnumMemberAST *> members;
 
     EnumDeclAST() : DeclAST(ASTKind::EnumDecl, InternedString{}) {}
 
     EnumDeclAST(InternedString n,
-                ArenaSpan<InternedString> m,
+                ArenaSpan<EnumMemberAST *> m,
                 ArenaSpan<AttributeAST *> attrs = {})
         : DeclAST(ASTKind::EnumDecl, n, attrs), members(m) {}
 };

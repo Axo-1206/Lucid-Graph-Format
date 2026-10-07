@@ -100,19 +100,19 @@ TEST_CASE("EnumDeclAST: `enum Key { A, B, C }`",
     ASTArena arena;
     StringPool pool;
 
-    auto members = arena.makeSpan<InternedString>({
-        pool.intern("A"),
-        pool.intern("B"),
-        pool.intern("C"),
-    });
+    auto *memberA = arena.make<EnumMemberAST>(pool.intern("A"));
+    auto *memberB = arena.make<EnumMemberAST>(pool.intern("B"));
+    auto *memberC = arena.make<EnumMemberAST>(pool.intern("C"));
+    auto members =
+        arena.makeSpan<EnumMemberAST *>({memberA, memberB, memberC});
 
     EnumDeclAST d{pool.intern("Key"), members};
 
     REQUIRE(pool.lookupView(d.name) == "Key");
     REQUIRE(d.members.size() == 3);
-    REQUIRE(pool.lookupView(d.members[0]) == "A");
-    REQUIRE(pool.lookupView(d.members[1]) == "B");
-    REQUIRE(pool.lookupView(d.members[2]) == "C");
+    REQUIRE(pool.lookupView(d.members[0]->name) == "A");
+    REQUIRE(pool.lookupView(d.members[1]->name) == "B");
+    REQUIRE(pool.lookupView(d.members[2]->name) == "C");
 }
 
 TEST_CASE("EnumDeclAST: empty enum",
@@ -552,7 +552,8 @@ TEST_CASE("DeclAST: a span of the family base holds different decl kinds",
 
     auto *imp = arena.make<ImportDeclAST>(
         pool.intern("core"), pool.intern("core"));
-    auto *en = arena.make<EnumDeclAST>(pool.intern("E"), ArenaSpan<InternedString>{});
+    auto *en =
+        arena.make<EnumDeclAST>(pool.intern("E"), ArenaSpan<EnumMemberAST *>{});
     auto *res = arena.make<ResourceDeclAST>(pool.intern("R"), ArenaSpan<ResourceFieldAST *>{});
     auto *node = arena.make<NodeDeclAST>(pool.intern("n"), nullptr);
 

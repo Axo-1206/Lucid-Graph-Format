@@ -57,7 +57,7 @@ TEST_CASE("ModuleAST: decls span holds the declarations in order",
     StringPool pool;
 
     auto *en = arena.make<EnumDeclAST>(pool.intern("Color"),
-                                       ArenaSpan<InternedString>{});
+                                       ArenaSpan<EnumMemberAST *>{});
     auto *res = arena.make<ResourceDeclAST>(pool.intern("Config"),
                                             ArenaSpan<ResourceFieldAST *>{});
     auto *nd = arena.make<NodeDeclAST>(pool.intern("speed"), nullptr);
@@ -99,11 +99,11 @@ TEST_CASE("ModuleAST: a module with one of every top-level declaration kind",
         pool.intern("core.keys"), pool.intern("k"));
 
     // enum Color { Red, Green, Blue }
-    auto members = arena.makeSpan<InternedString>({
-        pool.intern("Red"),
-        pool.intern("Green"),
-        pool.intern("Blue"),
-    });
+    auto *memberRed = arena.make<EnumMemberAST>(pool.intern("Red"));
+    auto *memberGreen = arena.make<EnumMemberAST>(pool.intern("Green"));
+    auto *memberBlue = arena.make<EnumMemberAST>(pool.intern("Blue"));
+    auto members = arena.makeSpan<EnumMemberAST *>(
+        {memberRed, memberGreen, memberBlue});
     auto *en = arena.make<EnumDeclAST>(pool.intern("Color"), members);
 
     // resource Config { speed: float = 200.0 }

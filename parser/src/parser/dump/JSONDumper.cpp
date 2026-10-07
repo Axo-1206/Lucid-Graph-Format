@@ -60,6 +60,8 @@ namespace lucid::parser::dump
                 return "ImportDecl";
             case ASTKind::EnumDecl:
                 return "EnumDecl";
+            case ASTKind::EnumMember:
+                return "EnumMember";
             case ASTKind::ResourceDecl:
                 return "ResourceDecl";
             case ASTKind::ResourceField:
@@ -195,6 +197,9 @@ namespace lucid::parser::dump
                 break;
             case ASTKind::EnumDecl:
                 writeEnumDecl(node->as<EnumDeclAST>());
+                break;
+            case ASTKind::EnumMember:
+                writeEnumMember(node->as<EnumMemberAST>()); // ← added
                 break;
             case ASTKind::ResourceDecl:
                 writeResourceDecl(node->as<ResourceDeclAST>());
@@ -353,14 +358,17 @@ namespace lucid::parser::dump
             m_writer.kv("name", lookup(node->name));
 
             m_writer.key("members");
-            m_writer.beginArray();
-            for (InternedString m : node->members)
-            {
-                m_writer.value(lookup(m));
-            }
-            m_writer.endArray();
+            writeNodeArray(node->members); // now a span of EnumMemberAST*
 
             writeAttributes(node->attributes);
+            m_writer.endObject();
+        }
+
+        void writeEnumMember(const EnumMemberAST *node)
+        {
+            m_writer.beginObject();
+            writeNodeHeader(node);
+            m_writer.kv("name", lookup(node->name));
             m_writer.endObject();
         }
 
