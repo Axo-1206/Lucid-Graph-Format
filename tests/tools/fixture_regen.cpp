@@ -3,13 +3,20 @@
 // Regenerates all fixture expected files:
 //
 //   1. Parser good/*.lucid → good/*.json
-//      For each source, parses it and dumps the AST to JSON.
+//      For each source, parses it and dumps the AST to JSON. A source
+//      that produces parse errors is reported and the tool exits
+//      non-zero without writing, because the good/ directory is
+//      supposed to contain sources that parse cleanly.
 //
 //   2. Formatter canonical/*.lucid → canonical/*.expected
 //      For each source, parses and formats it, then writes the result.
 //      Also verifies idempotence: formatting the output again must
 //      produce the same output. If it does not, the tool reports the
 //      non-idempotent fixture and exits non-zero without writing.
+//
+// The formatter's idempotent/ fixtures have no generated output and are
+// not touched by this tool. They are checked by the test in
+// tests/formatter/test_formatter_fixtures.cpp.
 //
 // Run via:
 //
@@ -90,11 +97,11 @@ namespace
         int count = 0;
         for (const auto &lucidPath : lucidFiles)
         {
-            const std::string source   = readFile(lucidPath);
+            const std::string source = readFile(lucidPath);
             const std::string fileName = lucidPath.filename().string();
 
             StringPool pool;
-            ASTArena   arena;
+            ASTArena arena;
             diag::DiagnosticEngine diagEngine(&pool);
             parser::TokenStream dummyStream(std::vector<Token>{
                 Token{TokenType::EOF_TOKEN, InternedString{},
@@ -102,6 +109,27 @@ namespace
             parser::ParserContext ctx(pool, arena, diagEngine, dummyStream);
 
             ModuleAST *module = parser::parseFile(fileName, source, ctx);
+
+            // A file in good/ must parse cleanly. If it does not, the
+            // fixture itself is stale — most likely because it still uses
+            // a grammar construct that has been removed or renamed. Report
+            // the errors and stop without writing, so the stale fixture is
+            // fixed by hand rather than baked into a .json that encodes a
+            // parse error.
+            if (module->hasErrors)
+            {
+                std::cerr << "parse errors in good fixture: " << fileName
+                          << "\n";
+                for (const auto &d : diagEngine.all())
+                {
+                    if (d.isError())
+                    {
+                        std::cerr << "  " << d.message << "\n";
+                    }
+                }
+                return 1;
+            }
+
             const std::string json = parser::dump::dumpModule(module, pool);
 
             fs::path jsonPath = lucidPath;
@@ -133,7 +161,7 @@ namespace
         int count = 0;
         for (const auto &lucidPath : lucidFiles)
         {
-            const std::string source   = readFile(lucidPath);
+            const std::string source = readFile(lucidPath);
             const std::string fileName = lucidPath.filename().string();
 
             // First format pass.
@@ -166,8 +194,10 @@ namespace
             if (first.text != second.text)
             {
                 std::cerr << "non-idempotent fixture: " << fileName << "\n";
-                std::cerr << "  first  format output:\n" << first.text  << "\n";
-                std::cerr << "  second format output:\n" << second.text << "\n";
+                std::cerr << "  first  format output:\n"
+                          << first.text << "\n";
+                std::cerr << "  second format output:\n"
+                          << second.text << "\n";
                 return 1;
             }
 
