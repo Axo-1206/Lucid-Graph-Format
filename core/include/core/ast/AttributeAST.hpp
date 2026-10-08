@@ -8,22 +8,43 @@
 ///     attribute_list ::= { '@' IDENTIFIER }
 ///
 /// An attribute list is a sequence of `@name` prefixes. The only
-/// recognized attribute is `@export`, which controls whether a declaration
-/// is visible outside its module. A declaration may be preceded by any
-/// number of attributes.
+/// recognized attribute is `@export`, which controls whether a resource
+/// declaration is visible outside its module. A declaration may be
+/// preceded by any number of attributes.
 ///
-/// ─── The parser does not validate ─────────────────────────────────────────
-/// The parser accepts any identifier after `@`. It does not know the set
-/// of recognized attributes and does not enforce where they may appear.
-/// Sema does both: it reports an unknown attribute (`Attr_Unknown`) and an
-/// attribute in an illegal position (`Attr_ExportOnImport`,
-/// `Attr_ExportOnField`, ...).
+/// ─── Where attributes may appear ──────────────────────────────────────────
+/// The grammar allows an attribute list on any of the four top-level
+/// declarations:
+///
+///     import_decl   ::= attribute_list 'import'   ...
+///     enum_decl     ::= attribute_list 'enum'     ...
+///     resource_decl ::= attribute_list 'resource' ...
+///     node_decl     ::= attribute_list 'node'     ...
+///
+/// The parser accepts any `@name` in any of those positions. It does not
+/// know the set of recognized attributes and does not enforce where they
+/// may appear.
+///
+/// ─── What Sema enforces ───────────────────────────────────────────────────
+/// Sema enforces two rules:
+///
+///   1. The set of recognized attributes is exactly { @export }.
+///      Any other `@name` is `Attr_Unknown`.
+///
+///   2. `@export` is meaningful on `resource` only. Syntactically it may
+///      precede `import`, `enum`, or `node`; semantically it is an error
+///      on any of them (`Attr_ExportOnImport`, `Attr_ExportOnEnum`,
+///      `Attr_ExportOnNode`). An `@export` inside a declaration body is
+///      `Attr_ExportOnField`. The same attribute twice on one declaration
+///      is `Attr_Duplicate`.
 ///
 /// ─── No argument list ─────────────────────────────────────────────────────
 /// The grammar allows `@IDENTIFIER` only, with no parenthesized arguments.
-/// Every recognized attribute takes no arguments. If a future attribute
-/// needs arguments, this node grows a field and the parser's attribute
-/// rule grows the corresponding parse.
+/// Every recognized attribute takes no arguments. `@deprecate` is not part
+/// of the format; a future deprecation mechanism is handled by a special
+/// comment convention or by a future attribute, deferred until needed. If
+/// a future attribute needs arguments, this node grows a field and the
+/// parser's attribute rule grows the corresponding parse.
 ///
 /// ─── Location convention ──────────────────────────────────────────────────
 /// The node's `loc` is the location of the `@` sign, not the identifier

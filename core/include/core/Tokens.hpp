@@ -5,12 +5,12 @@
  *                 TokenType enum, the LiteralKind enum, the Token value
  *                 type, and the classification predicates the parser uses.
  *
- * ─── Design: nine keywords ────────────────────────────────────────────────
- * §1.2 and §5 list nine keywords. §2.2's import production writes 'as',
- * but 'as' is not in §1.2's keyword set and not in §5's lexer sketch. The
- * consistent reading is that 'as' is an ordinary identifier and the parser
- * matches it by spelling. The parser does the same for any reserved word
- * the grammar might add later.
+ * ─── Design: keywords ─────────────────────────────────────────────────────
+ * §1.2 lists the reserved keywords: import, from, enum, resource, node, on.
+ * §2.2's import production writes 'as', but 'as' is not in §1.2's keyword
+ * set. The consistent reading is that 'as' is an ordinary identifier and
+ * the parser matches it by spelling. The parser does the same for any
+ * reserved word the grammar might add later.
  *
  * ─── Design: true, false, nil are literals, not keywords ──────────────────
  * The grammar classifies them as literal forms (§1.4: BOOL_LIT, NIL_LIT).
@@ -26,6 +26,19 @@
  * text (already unescaped for strings and chars). Every other token's
  * `value` field is a valid but unused InternedString (usually the token's
  * spelling, interned once).
+ *
+ * ─── Design: ':' and '::' are distinct tokens ─────────────────────────────
+ * The grammar uses ':' as the resource-field separator (`name: type`) and
+ * '::' as the module qualifier (`module::Name`). They are separate token
+ * types, not one token with a length. The lexer emits COLON_COLON when it
+ * sees two consecutive ':' and COLON otherwise. This keeps the grammar
+ * LL(1) at the resource-field type position; see Grammar.md §3.4.
+ *
+ * ─── Design: '[' and ']' are reserved ─────────────────────────────────────
+ * LBRACKET and RBRACKET are lexed but no production uses them. They are
+ * reserved so that a future array or index syntax does not require a lexer
+ * change. A '[' or ']' in source is a syntax error at the parser, not the
+ * lexer.
  */
 
 #pragma once
@@ -93,18 +106,24 @@ enum class TokenType : uint16_t
     NIL_LITERAL,
 
     // ─── Punctuation ────────────────────────────────────────────────────
+    //
+    // Grouped: opening delimiters, closing delimiters, separators,
+    // accessors, sigils. The order is documentation; isPunctuation uses
+    // an explicit switch, not a range check, so the grouping is free to
+    // change without breaking classification.
 
-    LPAREN,
-    RPAREN,
-    LBRACE,
-    RBRACE,
-    LBRACKET,
-    RBRACKET,
-    COMMA,
-    DOT,
-    COLON,
-    EQUALS,
-    AT_SIGN,
+    LPAREN,      // (
+    RPAREN,      // )
+    LBRACE,      // {
+    RBRACE,      // }
+    LBRACKET,    // [   reserved; no production uses it
+    RBRACKET,    // ]   reserved; no production uses it
+    COMMA,       // ,
+    DOT,         // .   field access; also part of a float literal
+    COLON,       // :   resource-field separator
+    COLON_COLON, // ::  module qualifier
+    EQUALS,      // =
+    AT_SIGN,     // @   attribute sigil
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,9 +176,29 @@ inline bool isLiteral(TokenType t) noexcept
     return t >= TokenType::INT_LITERAL && t <= TokenType::NIL_LITERAL;
 }
 
+/// True for every punctuation token, including the reserved brackets and
+/// the two-colon qualifier. The switch is explicit so that adding a token
+/// to the enum does not silently change classification.
 inline bool isPunctuation(TokenType t) noexcept
 {
-    return t >= TokenType::LPAREN && t <= TokenType::AT_SIGN;
+    switch (t)
+    {
+    case TokenType::LPAREN:
+    case TokenType::RPAREN:
+    case TokenType::LBRACE:
+    case TokenType::RBRACE:
+    case TokenType::LBRACKET:
+    case TokenType::RBRACKET:
+    case TokenType::COMMA:
+    case TokenType::DOT:
+    case TokenType::COLON:
+    case TokenType::COLON_COLON:
+    case TokenType::EQUALS:
+    case TokenType::AT_SIGN:
+        return true;
+    default:
+        return false;
+    }
 }
 
 inline bool isOpeningDelimiter(TokenType t) noexcept

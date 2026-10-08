@@ -114,20 +114,35 @@ The top level contains only declarations. There are no top-level statements. Not
 ### 2.2 Imports
 
 ```
-import_decl ::= attribute_list 'import' module_path [ 'as' IDENTIFIER ]
+import_decl ::= attribute_list 'import' module_path
 module_path ::= IDENTIFIER { '.' IDENTIFIER }
 ```
 
-`import core.keys` loads `core/keys.lucid` and binds it to the local name `keys`.
-`import core.keys as k` binds it to `k`.
+`import core.keys` loads `core/keys.lucid`.
 
 An `import_decl` may appear anywhere among the top-level declarations of a module.
 
-**Import model.** An import binds the module's exported declarations into the importing module's scope. An exported `enum`, `resource`, or `node` is referenced by its bare name after import. When two imports would collide, the author uses `as` to bind a distinct local name, and reaches the declaration through that alias.
+**The import model.** An import binds two things:
 
-An alias is used as a **qualifier** with `::`. For example, if a module is imported as `k`, a type from it is written `k::Key`, and a node type from it is written `k::Health`. The dot is reserved for field access; it never names a module.
+1. The module's **exported declarations**, into the importing module's scope, by their bare names.
+2. A **module name**, which can be used as a `::` qualifier in type positions.
 
-**Depth.** A qualified name has at most one qualifier. `k::Key` is valid; `a::b::Key` is not. If a module re-exports a type from a third module, the importing module binds the re-export directly; the author does not write a chain of qualifiers.
+The module name is always the final segment of the module path. `import core.keys` binds the module name `keys`; `import engine.physics` binds `physics`. There is no alias and no `as` clause.
+
+**Bare access.** An exported `enum`, `resource`, or `node` is reachable by its bare name after import. If `core.keys` exports an enum `Key`, then after `import core.keys`, the author writes `Key` for the type and `Key.W` for a member. The dot is field access; the bare name is what the import injects.
+
+**Qualified access.** The module name is used as a `::` qualifier, in **type positions only**:
+
+- A resource field's type: `keys::Key`.
+- A node's type: `physics::Body`.
+
+The qualifier is optional. It is useful when a bare name would collide with another declaration, or when the author wants to make the origin explicit.
+
+**Values are always bare.** A value reaches a declaration by its bare name, never through a module qualifier. `Key.W` is a value; `keys::Key.W` is not expressible. This is deliberate: the dot is field access and the double-colon is module qualification, and a value cannot carry both. If a bare name would be ambiguous, the author resolves the ambiguity at the type position (using `keys::Key` for the type) and still writes the member bare (`Key.W`).
+
+**Collisions.** Two imports that export the same bare name collide (`Name_Redeclaration`). The resolution is the module qualifier at the type position: `a::Key` and `b::Key` are distinct. A value-position reference to the colliding name is ambiguous; the current grammar does not provide a way to disambiguate it. See §4.2.
+
+**Depth.** A qualified name has at most one qualifier. `keys::Key` is valid; `a::b::Key` is not. The import model guarantees that one level is enough: every module that imports a module binds its exported declarations bare, so an author never needs to write a chain of qualifiers to reach a re-export.
 
 ### 2.3 Attributes
 
@@ -173,7 +188,7 @@ A resource field has a name, a type, and an optional default. A field with no de
 
 The default is a `value` (§2.7), not only a literal, so enum member access such as `Key.A` or `Direction.North` is accepted. The grammar allows any value; Sema enforces that the default is meaningful for the field's type.
 
-`type_id` allows one level of module qualification, using `::` as the separator: `Key` from the local scope, `core::Key` from an import bound as `core`.
+`type_id` allows one level of module qualification, using `::` as the separator: `Key` from the local scope, `keys::Key` from the module `core.keys`.
 
 ```
 @export
@@ -215,8 +230,8 @@ node damage      = Damage(body, 10) on on_hit, on_other
 `NodeType` may be qualified to reach a node type from an imported module, using `::`:
 
 ```
-import health
-node h = health::Health(100)
+import engine.physics
+node h = physics::Body(player)
 ```
 
 ### 2.7 Values
@@ -251,7 +266,7 @@ The parser produces a `FieldAccessValueAST`; Sema resolves the object's kind and
 
 A `node_expr` at value position creates an inline node. It is valid but discouraged; a named node is more readable and reusable.
 
-**Dot vs. double-colon.** A dot (`.`) is field access. A double-colon (`::`) is module qualification. They never mix in one name: `Key.W` is an enum member; `core::Key` is a qualified type. `core::Key.W` is not expressible, because an imported declaration is reached through the alias only at the type or node-type position, not at the value position. A value reaches a declaration by its bare imported name: `Key.W`.
+**Dot vs. double-colon.** A dot (`.`) is field access. A double-colon (`::`) is module qualification. They never mix in one name: `Key.W` is an enum member; `keys::Key` is a qualified type. `keys::Key.W` is not expressible, because an imported declaration is reached through the qualifier only at the type or node-type position, not at the value position. A value reaches a declaration by its bare imported name: `Key.W`.
 
 ### 2.8 The type system
 
@@ -318,13 +333,19 @@ The following are known gaps in this grammar and the surrounding design. They ar
 
 `type_id ::= [ IDENTIFIER '::' ] IDENTIFIER` allows one level of module qualification. It does not allow deeper paths. If a module re-exports a type from a third module, this grammar cannot express it directly.
 
-**Open question:** Is one level sufficient? The import model (§2.2) says an imported declaration is reached through a single alias. If a re-export is needed, the re-exporting module binds the name, and the importing module binds that binding under a new alias. Under that model, one level is sufficient. If re-export chains are needed, `type_id` grows to `IDENTIFIER { '::' IDENTIFIER }`, and `TypeIdAST`'s `qualifier` field becomes a span.
+**Open question:** Is one level sufficient? The import model (§2.2) says every module that imports a module binds its exported declarations bare, so an author never needs a chain of qualifiers. Under that model, one level is sufficient. If re-export chains must be expressible, `type_id` grows to `IDENTIFIER { '::' IDENTIFIER }`, and `TypeIdAST`'s `qualifier` field becomes a span.
 
-### 4.2 Qualified value access
+### 4.2 Collisions at the value position
 
-A value reaches a declaration by its bare imported name: `Key.W`. It cannot reach a declaration through a module alias: `core::Key.W` is not expressible. This is deliberate. The dot is field access; the double-colon is module qualification; mixing them in one name would require the parser to decide which `::` and which `.` belong to which name.
+Two imports that export the same bare name collide. The resolution is the module qualifier at the type position: `a::Key` and `b::Key` are distinct. But a value reaches a declaration by its bare name, and there is no qualifier for a value. So a value-position reference to a colliding name is ambiguous, and the current grammar provides no way to disambiguate it.
 
-**Open question:** Is bare-name access sufficient for values? The import model says yes, because the importing module binds the exported name directly. If a value must reach a shadowed name, the author uses `as` on the import to bind a distinct alias, and then reaches the alias-qualified type at the type position (`k::Key`) and the bare member at the value position (`Key.W`).
+**Open question:** Is this acceptable? Three responses are possible:
+
+1. **Host guarantees unique exported names.** If the host registry refuses to register two node types, enums, or resources with the same exported name, collisions cannot occur, and the question is moot. This is the simplest resolution and probably the right one for a graph format where the host controls the vocabulary.
+2. **Allow `::` in value position.** Widen `value` to permit `IDENTIFIER '::' IDENTIFIER '.' IDENTIFIER` (or a similar shape), so a value can be qualified. This reintroduces the mix of `::` and `.` that the current grammar avoids, and it forces `FieldAccessValueAST` to carry an optional qualifier.
+3. **Add an import-rename mechanism.** A way to bind an imported declaration under a new bare name in the importing module. This is the `as` clause under a different shape, and it reintroduces the naming complexity that the current grammar removed.
+
+The current grammar chooses none of these. It documents the gap and leaves it open.
 
 ### 4.3 Attribute arguments
 
@@ -382,7 +403,7 @@ top_decl    ::= import_decl
               | resource_decl
               | node_decl
 
-import_decl ::= attribute_list 'import' module_path [ 'as' IDENTIFIER ]
+import_decl ::= attribute_list 'import' module_path
 module_path ::= IDENTIFIER { '.' IDENTIFIER }
 
 attribute_list ::= { '@' IDENTIFIER }
@@ -414,36 +435,3 @@ literal ::= INT_LIT
           | BOOL_LIT
           | NIL_LIT
 ```
-
----
-
-## Summary of what changed in this version
-
-**`::` replaces `:` for module qualification.** `core::Key`, `health::Health`. The single `:` remains only as the resource-field separator (`name: type`). The two are distinct tokens, so there is no ambiguity and no LL(2) anywhere.
-
-**Parser, lexer, and Sema sections removed.** §5 (lexer sketch), §6 (parser output), and §7 (Sema's job) are gone. They were implementation notes, not grammar. What remains is the lexical grammar, the syntactic grammar, grammar notes, open questions, and the consolidated grammar.
-
-**LL(1) is restored everywhere.** §3.4 no longer needs an LL(2) exception. The resource-field type position is unambiguous because `:` and `::` are different tokens.
-
-**§4.1 (`type_id` depth) and §4.2 (qualified value access) are reframed.** They now ask whether one level of `::` qualification is sufficient, and whether bare-name value access is enough. The answers depend on the import model, which §2.2 states.
-
-**§4.3 (attribute arguments) is updated.** It now explicitly says `@deprecate` is not part of the format and that the decision to add it is deferred.
-
-**`[` `]` still reserved.** §1.6 keeps them in the punctuation set with a note. No production uses them.
-
----
-
-## What is still stale in the other files
-
-These are the remaining fixes, in actual-code form, when you want them:
-
-1. **`DeclAST.hpp` — `ResourceFieldAST` constructor.** Takes `LiteralValueAST*`; should take `BaseAST*`, because the default is a `value` and `Key.A` is a field access.
-2. **`DiagCode.hpp` — `Event_PortNotAllowed` (5303) and `Event_OutputNotTrigger` (5304).** Composite-era. Remove.
-3. **`DiagCode.hpp` — attribute comment.** Now that `@export` is legal on all four declarations syntactically and rejected by Sema on three, the comment block should say so.
-4. **`ValueAST.hpp` — `"-7"` example.** Not a valid lexeme. Change to `"7"` or `"42"`.
-5. **`TypeAST.hpp` and `ValueAST.hpp` — `TypeIdAST` doc.** The separator is now `::`, not `.`. Update the examples to `core::Key`.
-6. **`Tokens.hpp` — `COLON_COLON`.** Add a new token type for `::`, and a lexer rule that distinguishes it from `:`.
-7. **`Diagnostic.cpp` — "Phase 1 stub" comment.** Stale. Remove.
-8. **`AttributeAST.hpp` — doc.** Note that `@export` is syntactically allowed on all declarations and semantically resource-only.
-
-Tell me which of these to write next, and I'll do it in actual-code form.

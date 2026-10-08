@@ -200,15 +200,6 @@ namespace lucid::diag
     // ─────────────────────────────────────────────────────────────────────────────
     // Location helper
     // ─────────────────────────────────────────────────────────────────────────────
-    //
-    // Phase 1 stub. BaseAST does not exist yet. In Phase 2 this file will
-    // include "core/ast/BaseAST.hpp" and the body becomes:
-    //
-    //   return node ? node->loc : SourceLocation{};
-    //
-    // Nothing in Phase 1 calls the AST-aware overloads; every diagnostic test
-    // uses the errorAt/warningAt/noteAt/hintAt variants, which pass a location
-    // explicitly.
 
     SourceLocation locationOf(const BaseAST *node) noexcept
     {

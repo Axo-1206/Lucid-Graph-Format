@@ -7,14 +7,13 @@
  * the same code whether the lexer catches it at compile time or an LSP
  * reports it on a buffer.
  *
- * ─── Design: the code space reflects the new grammar ──────────────────────
- * The grammar in docs/grammar/LUCID_GRAMMAR.md has four top-level
- * declaration forms (import, enum, resource, node), a single type
- * reference (`type_id`), and four value forms (literal, identifier,
- * field access, inline node). There are no functions, no statements, no
- * operators, no tables, no sequences, and no user-defined types beyond the
- * four declarations. The code space below covers exactly what the grammar
- * can produce, plus the small set of names Sema will need when it lands.
+ * ─── Design: the code space reflects the grammar ──────────────────────────
+ * The grammar has four top-level declaration forms (import, enum, resource,
+ * node), a single type reference (`type_id`), and four value forms (literal,
+ * identifier, field access, inline node). There are no functions, no
+ * statements, no operators, no tables, no sequences, and no user-defined
+ * types beyond the four declarations. The code space below covers exactly
+ * what the grammar can produce, plus the small set of names Sema will need.
  *
  * ─── Bands ────────────────────────────────────────────────────────────────
  *   1000-1099  Lexical
@@ -23,6 +22,7 @@
  *   4000-4099  Value and type
  *   5000-5099  Attributes
  *   5100-5199  Imports
+ *   5300-5399  Event rules
  *   7000-7099  Internal / panic / assertion
  *   8000-8299  Warnings
  *
@@ -128,11 +128,6 @@ namespace lucid::diag
         // ═════════════════════════════════════════════════════════════════════════
         // LEXICAL (1000-1099)
         // ═════════════════════════════════════════════════════════════════════════
-        //
-        // Unchanged from the reference project. The new grammar's lexical set
-        // is smaller, but every lexical error the reference lexer caught is
-        // still possible: bad characters, unterminated strings, invalid
-        // escapes, malformed numbers.
 
         Lex_InvalidCharacter = 1001,
         Lex_UnknownCharacter = 1002,
@@ -150,10 +145,6 @@ namespace lucid::diag
         // ═════════════════════════════════════════════════════════════════════════
 
         // ─── General (2000-2049) ───────────────────────────────────────────
-        //
-        // The shape-level errors every parser can produce: a token that is
-        // present but wrong, a required token that is missing, an
-        // unrecoverable parse.
 
         Syntax_ExpectedIdentifier = 2001,
         Syntax_ExpectedToken = 2002,
@@ -164,9 +155,12 @@ namespace lucid::diag
         Syntax_IncompleteDeclaration = 2007,
 
         // ─── Import (2050-2069) ────────────────────────────────────────────
+        //
+        // The import production is `attribute_list 'import' module_path`.
+        // There is no `as` clause and no alias, so the only import-specific
+        // syntax error is a missing or malformed module path.
 
-        Syntax_ExpectedModulePath = 2050,  // 'import' with no path
-        Syntax_ExpectedImportAlias = 2051, // 'as' with no identifier
+        Syntax_ExpectedModulePath = 2050, // 'import' with no path
 
         // ─── Enum (2070-2079) ──────────────────────────────────────────────
 
@@ -180,7 +174,7 @@ namespace lucid::diag
         Syntax_ExpectedResourceBody = 2081,
         Syntax_ExpectedFieldName = 2082,
         Syntax_ExpectedFieldType = 2083,    // ':' present, type missing
-        Syntax_ExpectedFieldDefault = 2084, // '=' present, literal missing
+        Syntax_ExpectedFieldDefault = 2084, // '=' present, value missing
 
         // ─── Node (2100-2119) ──────────────────────────────────────────────
 
@@ -207,7 +201,6 @@ namespace lucid::diag
         //
         // Sema's territory. The formatter does not resolve names, but the
         // codes exist so that Sema's error reporting is defined in one place.
-        // They are declared here, unused, until Sema lands.
 
         Name_UndefinedModule = 3001,     // import path resolves to nothing
         Name_UndefinedType = 3002,       // type_id resolves to nothing
@@ -223,10 +216,6 @@ namespace lucid::diag
         // ═════════════════════════════════════════════════════════════════════════
         // VALUE AND TYPE (4000-4099)
         // ═════════════════════════════════════════════════════════════════════════
-        //
-        // Sema's territory again. The formatter does not check types or
-        // constant-fold, but the codes exist for the pipeline's single
-        // diagnostic engine.
 
         Type_Mismatch = 4001,           // arg type does not match slot
         Type_ArgCountMismatch = 4002,   // too many or too few args
@@ -243,10 +232,21 @@ namespace lucid::diag
         // ATTRIBUTES (5000-5099)
         // ═════════════════════════════════════════════════════════════════════════
         //
-        // The new grammar has exactly one recognized attribute: @export. Any
-        // other @name is an unknown attribute. @export itself is only
-        // meaningful on resource declarations; on any other declaration it is
-        // an error.
+        // The grammar allows an attribute list on any of the four top-level
+        // declarations (import, enum, resource, node). The parser accepts
+        // any @name in any of those positions. Sema enforces two rules:
+        //
+        //   1. The set of recognized attributes is exactly { @export }.
+        //      Any other @name is Attr_Unknown.
+        //
+        //   2. @export is meaningful on `resource` only. Syntactically it
+        //      may precede import, enum, or node; semantically it is an
+        //      error on any of them (Attr_ExportOnImport,
+        //      Attr_ExportOnEnum, Attr_ExportOnNode).
+        //
+        // @deprecate is not part of the format. A future deprecation
+        // mechanism is handled by a special comment convention or by a
+        // future attribute, deferred until needed.
 
         Attr_Unknown = 5001,          // @name not recognized
         Attr_ExportOnImport = 5002,   // @export on import_decl
@@ -262,27 +262,28 @@ namespace lucid::diag
         // ═════════════════════════════════════════════════════════════════════════
         //
         // The formatter does not resolve imports; the CLI does, and Sema
-        // consumes the result. The codes exist for the pipeline.
+        // consumes the result. The import production has no alias, so
+        // there is no alias-collision code. A collision between two
+        // imports' exported bare names is Name_Redeclaration (3008), not
+        // an import-band code.
 
         Import_ModuleNotFound = 5101, // file does not exist
         Import_Circular = 5102,       // A imports B imports A
-        Import_AliasCollision = 5103, // two imports bind the same name
-        Import_NotAFile = 5104,       // path resolves to a directory
+        Import_NotAFile = 5103,       // path resolves to a directory
 
         // ═════════════════════════════════════════════════════════════════════════
         // EVENT RULES (5300-5399)
         // ═════════════════════════════════════════════════════════════════════════
         //
-        // Sema's rules about the Event type and node subscription:
+        // Sema's rules about node subscription. The format has no Event
+        // type and no composite nodes; a trigger source is only a trigger
+        // node, and an action node must have at least one `on` clause.
         //
-        //   - An `on` clause's target must be a trigger source.
+        //   - An `on` clause's target must be a trigger node.
         //   - An action node must have at least one `on` clause.
-        //   - A node port cannot have type Event.
 
         Event_OnTargetNotTrigger = 5301,
         Event_ActionWithoutOn = 5302,
-        Event_PortNotAllowed = 5303,
-        Event_OutputNotTrigger = 5304,
 
         // ═════════════════════════════════════════════════════════════════════════
         // INTERNAL / PANIC (7000-7099)
@@ -299,18 +300,14 @@ namespace lucid::diag
         // ═════════════════════════════════════════════════════════════════════════
         // WARNINGS (8000-8299)
         // ═════════════════════════════════════════════════════════════════════════
-        //
-        // Warnings the formatter or Sema can emit. The formatter emits a small
-        // set; Sema emits the rest when it lands.
 
         Warn_UnusedImport = 8001,
         Warn_UnusedResource = 8002,
         Warn_UnusedNode = 8003, // value node never referenced
         Warn_UnusedEnum = 8004,
-        Warn_DeadNode = 8005,     // action node with no trigger
-        Warn_ShadowedName = 8006, // import alias shadows a type
-        Warn_EmptyResource = 8007,
-        Warn_TrailingComma = 8009, // stylistic; formatter normalizes
+        Warn_DeadNode = 8005, // action node with no trigger
+        Warn_EmptyResource = 8006,
+        Warn_TrailingComma = 8007, // stylistic; formatter normalizes
 
         Warn_Deprecated = 8100, // reserved for a future @deprecated
     };

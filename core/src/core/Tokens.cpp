@@ -45,6 +45,7 @@ namespace
         ",",
         ".",
         ":",
+        "::",
         "=",
         "@",
     };
@@ -113,6 +114,8 @@ const char *tokenTypeDescription(TokenType t) noexcept
         return "'.'";
     case TokenType::COLON:
         return "':'";
+    case TokenType::COLON_COLON:
+        return "'::'";
     case TokenType::EQUALS:
         return "'='";
     case TokenType::AT_SIGN:
