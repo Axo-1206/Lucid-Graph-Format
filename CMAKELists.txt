@@ -181,6 +181,33 @@ if(MSVC)
     target_compile_options(lucid_formatter PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
+# ─── Library: lucid_sema ──────────────────────────────────────────────────
+#
+# Step 7.1: one .cpp file (the computeRegistryFingerprint stub).
+# The remaining .cpp files (Sema.cpp, SymbolCollector.cpp, etc.) arrive
+# in later steps.
+
+add_library(lucid_sema STATIC
+    sema/src/sema/Registry.cpp
+)
+
+target_include_directories(lucid_sema
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/sema/include"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/sema/src"
+)
+
+target_link_libraries(lucid_sema PUBLIC
+    lucid_core
+    lucid_parser
+)
+
+target_compile_options(lucid_sema PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid_sema PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
 # ─── Library: lucid_cli ───────────────────────────────────────────────────
 
 add_library(lucid_cli STATIC
@@ -237,6 +264,7 @@ message(STATUS "Libraries:")
 message(STATUS "  lucid_core       (core/)")
 message(STATUS "  lucid_parser     (parser/)")
 message(STATUS "  lucid_formatter  (formatter/)")
+message(STATUS "  lucid_sema       (sema/)")
 message(STATUS "")
 message(STATUS "Executable:")
 message(STATUS "  lucid-fmt        (src/main.cpp)")

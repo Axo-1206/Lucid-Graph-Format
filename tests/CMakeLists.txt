@@ -153,3 +153,24 @@ target_link_libraries(test_cli PRIVATE
 target_compile_options(test_cli PRIVATE ${LUCID_CXX_WARNINGS})
 
 add_test(NAME cli COMMAND test_cli)
+
+# ─── test_sema ─────────────────────────────────────────────────────────────
+
+add_executable(test_sema
+    sema/test_node_kind.cpp
+    sema/test_type_id.cpp
+    sema/test_literal.cpp
+    sema/test_registry.cpp
+    sema/test_graph.cpp
+    sema/test_sema_api.cpp
+    sema/test_sema_smoke.cpp
+)
+
+target_link_libraries(test_sema PRIVATE
+    lucid_sema
+    Catch2::Catch2WithMain
+)
+
+target_compile_options(test_sema PRIVATE ${LUCID_CXX_WARNINGS})
+
+add_test(NAME sema COMMAND test_sema)
