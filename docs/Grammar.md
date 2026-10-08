@@ -186,7 +186,9 @@ Enum values are compared by integer value. Two members of the same enum that the
 ### 2.5 Resources
 
 ```
-resource_decl  ::= attribute_list 'resource' IDENTIFIER '{' { resource_field } '}'
+resource_decl ::= attribute_list 'resource' IDENTIFIER
+                      '{' [ resource_field_list ] '}'
+resource_field_list ::= resource_field { ',' resource_field } [ ',' ]
 resource_field ::= IDENTIFIER ':' type_id [ '=' value ]
 
 type_id        ::= [ IDENTIFIER '::' ] IDENTIFIER
@@ -198,20 +200,26 @@ The default is a `value` (§2.7), not only a literal, so enum member access such
 
 `type_id` allows one level of module qualification, using `::` as the separator: `Key` from the local scope, `keys::Key` from the module `core.keys`.
 
+**Field separators.** Resource fields are comma-separated. The grammar is structurally identical to `enum_member_list`: an element, then zero or more `, element` pairs, then an optional trailing comma. A trailing comma is accepted, so the last field may end with `,` before the closing `}`. The two list forms are now parallel by design; a reader who learns the rule for one applies it to the other.
+
+**Why the comma is required.** A resource field is `name: type [= value]`; an enum member is a single identifier. Both are comma-separated, even though a resource field ends at an unambiguous boundary (the token before the next field name). The comma is not needed for parsing; it is needed for uniformity. A reader who sees `enum Key { A, B, C }` and `resource R { hp: int, speed: float }` should not have to remember that one list uses commas and the other does not.
+
 ```
 @export
 resource PlayerConfig {
-    speed:      float = 200.0
-    jump_force: float = -400.0
-    max_hp:     int   = 100
-    key_left:   Key   = Key.A
+    speed:      float = 200.0,
+    jump_force: float = -400.0,
+    max_hp:     int   = 100,
+    key_left:   Key   = Key.A,
 }
 
 resource PlayerState {
-    hp:   int  = 100
-    dead: bool = false
+    hp:   int  = 100,
+    dead: bool = false,
 }
 ```
+
+A resource with no fields is written `resource R { }`, and the `resource_field_list` production is not entered.
 
 ### 2.6 Nodes
 
@@ -339,6 +347,23 @@ There is no unary-minus production and no operator grammar. `a - b` is not valid
 
 The `-` in `--` (a line comment) is not a literal sign. The lexer recognizes `--` before it tries to read a signed number, so `--7` is a line comment, not a signed literal.
 
+### 3.8 Comma-separated lists
+
+The grammar has three comma-separated lists:
+
+```
+enum_member_list    ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
+resource_field_list ::= resource_field { ',' resource_field } [ ',' ]
+arg_list            ::= arg { ',' arg } [ ',' ]
+trigger_list        ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
+```
+
+All four are the same shape: an element, then zero or more `, element` pairs, then an optional trailing comma. A trailing comma is accepted in all four. The uniformity is deliberate; there is no list form that requires a comma *and* forbids a trailing one.
+
+The grammar does not accept a leading comma, a doubled comma, or a comma with no element after it (except the trailing one before the closing token). `{ , A }` and `{ A , , B }` are both syntax errors.
+
+The formatter's canonical output uses a comma after every element when the list is written one element per line (enum members, resource fields) and no trailing comma when the list is written on one line (node arguments, triggers). The grammar accepts both forms; the formatter picks the one that reads best for each construct.
+
 ---
 
 ## 4. Open questions and gaps
@@ -389,9 +414,9 @@ The grammar does not describe where comments may appear. In practice, comments a
 
 ### 4.7 Trailing commas
 
-The grammar allows trailing commas in `enum_member_list`, `arg_list`, and `trigger_list`. Resource fields are not comma-separated, so the question does not arise there.
+The grammar accepts a trailing comma in all four comma-separated lists. The formatter emits one for the multi-line lists (enum members, resource fields) and not for the single-line lists (arguments, triggers).
 
-**Open question:** Is allowing trailing commas in all comma-separated lists the right convention? The current grammar allows it consistently.
+**Open question:** Is the split correct, or should the formatter emit a trailing comma everywhere, or nowhere? The current behavior is documented in §3.8.
 
 ### 4.8 Registry stability across builds
 
@@ -439,7 +464,9 @@ attribute_list ::= { '@' IDENTIFIER }
 enum_decl ::= attribute_list 'enum' IDENTIFIER '{' enum_member_list '}'
 enum_member_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
 
-resource_decl  ::= attribute_list 'resource' IDENTIFIER '{' { resource_field } '}'
+resource_decl ::= attribute_list 'resource' IDENTIFIER
+                      '{' [ resource_field_list ] '}'
+resource_field_list ::= resource_field { ',' resource_field } [ ',' ]
 resource_field ::= IDENTIFIER ':' type_id [ '=' value ]
 
 node_decl    ::= attribute_list 'node' IDENTIFIER '=' node_expr [ 'on' trigger_list ]
