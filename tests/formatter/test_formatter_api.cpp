@@ -89,5 +89,5 @@ TEST_CASE("format accepts explicit FormatOptions",
 
     const FormatResult r = format("resource R { hp: int }", "test.lucid", opts);
     CHECK(r.ok == true);
-    CHECK(r.text == "resource R {\n  hp: int\n}\n");
+    CHECK(r.text == "resource R {\n  hp: int,\n}\n");
 }

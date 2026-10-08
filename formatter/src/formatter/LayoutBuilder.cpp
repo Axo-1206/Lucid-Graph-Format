@@ -328,10 +328,10 @@ namespace lucid::formatter
             drainCommentsBefore(member->loc);
 
             m_writer.write(lookup(member->name));
-            // Every member, including the last, gets a comma. The grammar
-            // allows a trailing comma, and a symmetric layout is easier to
-            // diff: adding or removing a member never touches the previous
-            // member's line.
+            // Every member, including the last, gets a comma. The
+            // grammar accepts a trailing comma, and a symmetric layout
+            // is easier to diff: adding or removing a member never
+            // touches the previous member's line.
             m_writer.write(',');
 
             drainTrailingComments(member->loc.line());
@@ -383,6 +383,16 @@ namespace lucid::formatter
             writeValue(node->defaultValue);
         }
 
+        // Every field, including the last, gets a comma. The grammar
+        // accepts a trailing comma, and the resource field list is
+        // structurally identical to the enum member list, so the
+        // formatter treats the two the same way.
+        //
+        // The comma is written before the trailing comment, so a
+        // comment on the field stays after the comma:
+        //
+        //     hp: int,    -- the hit points
+        m_writer.write(',');
         drainTrailingComments(node->loc.line());
         m_writer.newline();
     }

@@ -223,11 +223,14 @@ TEST_CASE("parseResourceDecl parses an empty resource", "[parse-decl]")
 
 TEST_CASE("parseResourceDecl parses a resource with fields", "[parse-decl]")
 {
+    // Resource fields are comma-separated. The formatter emits a
+    // trailing comma on every field; the parser accepts one and also
+    // accepts the last field without a comma.
     Fixture f;
     const char *source =
         "resource Player {\n"
-        "    speed: float = 200.0\n"
-        "    hp: int = 100\n"
+        "    speed: float = 200.0,\n"
+        "    hp: int = 100,\n"
         "}\n";
     ResourceDeclAST *node = f.run(source,
                                   [](TokenStream &s, ParserContext &c)
@@ -253,6 +256,47 @@ TEST_CASE("parseResourceDecl parses a resource with fields", "[parse-decl]")
     ResourceFieldAST *hp = node->fields[1];
     REQUIRE(hp != nullptr);
     CHECK(f.pool.lookupView(hp->name) == std::string_view{"hp"});
+}
+
+TEST_CASE("parseResourceDecl parses a resource without a trailing comma",
+          "[parse-decl]")
+{
+    // The trailing comma is optional: the last field may end without one.
+    Fixture f;
+    const char *source =
+        "resource Player {\n"
+        "    speed: float = 200.0,\n"
+        "    hp: int = 100\n"
+        "}\n";
+    ResourceDeclAST *node = f.run(source,
+                                  [](TokenStream &s, ParserContext &c)
+                                  {
+                                      return parseResourceDecl(s, c);
+                                  });
+    REQUIRE(node != nullptr);
+    CHECK_FALSE(node->hasSyntaxError);
+    REQUIRE(node->fields.size() == 2);
+}
+
+TEST_CASE("parseResourceDecl reports a missing comma between fields",
+          "[parse-decl]")
+{
+    // The no-comma form is now a syntax error. The parser reports the
+    // unexpected token and recovers.
+    Fixture f;
+    const char *source =
+        "resource Player {\n"
+        "    hp: int\n"
+        "    speed: float\n"
+        "}\n";
+    ResourceDeclAST *node = f.run(source,
+                                  [](TokenStream &s, ParserContext &c)
+                                  {
+                                      return parseResourceDecl(s, c);
+                                  });
+    REQUIRE(node != nullptr);
+    CHECK(node->hasSyntaxError);
+    CHECK(f.diag.hasErrors());
 }
 
 TEST_CASE("parseResourceField parses a field with no default", "[parse-decl]")

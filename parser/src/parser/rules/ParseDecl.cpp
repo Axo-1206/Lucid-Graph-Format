@@ -311,28 +311,18 @@ namespace lucid::parser
             return nullptr;
         }
 
+        // ─── The field list ────────────────────────────────────────────────
+        //
+        //     resource_field_list ::= resource_field { ',' resource_field } [ ',' ]
+        //
+        // An empty list is legal (`resource R { }`); in that case the first
+        // token inside the braces is the closing `}`.
         auto fields = ctx.arena.makeBuilder<ResourceFieldAST *>();
 
         while (!stream.check(TokenType::RBRACE) && !stream.isAtEnd() &&
                ctx.canContinue())
         {
-            if (!stream.check(TokenType::IDENTIFIER))
-            {
-                ctx.diag.errorAt(DiagCode::Syntax_ExpectedFieldName,
-                                 stream.currentLoc(),
-                                 "expected a resource field name");
-                // Recovery: skip to the next plausible field start or the
-                // closing brace. The stop set is the identifiers and the
-                // closing brace, at depth 0.
-                synchronizeTo(stream,
-                              TokenType::IDENTIFIER,
-                              TokenType::RBRACE);
-                if (!stream.check(TokenType::IDENTIFIER))
-                {
-                    break; // hit `}`, exit the loop
-                }
-            }
-
+            // ─── One field ────────────────────────────────────────────────
             ResourceFieldAST *field = parseResourceField(stream, ctx);
             if (field)
             {
@@ -340,16 +330,49 @@ namespace lucid::parser
             }
             else
             {
-                // parseResourceField returned nullptr; skip to the next
-                // plausible field start or the closing brace.
+                // parseResourceField reported. Skip to the next plausible
+                // field start, comma, or the closing brace.
                 synchronizeTo(stream,
                               TokenType::IDENTIFIER,
+                              TokenType::COMMA,
                               TokenType::RBRACE);
-                if (!stream.check(TokenType::IDENTIFIER))
+            }
+
+            // ─── The separator ────────────────────────────────────────────
+            // After a field: either `,` (continue) or `}` (end). Anything
+            // else is a syntax error.
+            if (stream.match(TokenType::COMMA))
+            {
+                // A trailing comma before `}` is allowed and ends the list.
+                if (stream.check(TokenType::RBRACE))
                 {
                     break;
                 }
+                // Otherwise, loop to parse the next field.
+                continue;
             }
+
+            if (stream.check(TokenType::RBRACE))
+            {
+                break;
+            }
+
+            // Neither `,` nor `}`. Report and recover.
+            ctx.diag.errorAt(DiagCode::Syntax_ExpectedClosing,
+                             stream.currentLoc(),
+                             "expected ',' or '}' after a resource field");
+            synchronizeTo(stream,
+                          TokenType::COMMA,
+                          TokenType::RBRACE);
+            if (stream.match(TokenType::COMMA))
+            {
+                if (stream.check(TokenType::RBRACE))
+                {
+                    break;
+                }
+                continue;
+            }
+            break;
         }
 
         if (!stream.match(TokenType::RBRACE))
