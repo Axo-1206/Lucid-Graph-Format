@@ -9,8 +9,8 @@
 /// names.
 ///
 /// ─── What Pass 2 does not do ──────────────────────────────────────────────
-/// It does not type-check, does not expand composites, does not detect
-/// cycles, and does not load imports. Those are later steps.
+/// It does not type-check, does not detect cycles,
+/// and does not load imports. Those are later steps.
 ///
 /// ─── The resolver's scope ─────────────────────────────────────────────────
 /// The resolver runs on one module at a time. It uses the module's

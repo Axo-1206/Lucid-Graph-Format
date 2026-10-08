@@ -37,7 +37,8 @@
 #include <utility>
 #include <vector>
 
-class ASTArena {
+class ASTArena
+{
 public:
   ASTArena() = default;
   ~ASTArena() = default;
@@ -52,28 +53,38 @@ public:
   // ─── Single object allocation ─────────────────────────────────────
 
   /// Allocate one T, constructed from `args`.
-  template <typename T, typename... Args> T *alloc(Args &&...args) {
+  template <typename T, typename... Args>
+  T *alloc(Args &&...args)
+  {
     char *p = allocRaw(sizeof(T), alignof(T));
     return ::new (p) T(std::forward<Args>(args)...);
   }
 
   /// Alias for `alloc`, for call sites that read better with `make`.
-  template <typename T, typename... Args> T *make(Args &&...args) {
+  template <typename T, typename... Args>
+  T *make(Args &&...args)
+  {
     return alloc<T>(std::forward<Args>(args)...);
   }
 
   // Family-specific aliases. They are identical to `make`; they exist
   // so a call site can read `arena.makeDecl(...)` and mean it.
 
-  template <typename T, typename... Args> T *makeDecl(Args &&...args) {
+  template <typename T, typename... Args>
+  T *makeDecl(Args &&...args)
+  {
     return alloc<T>(std::forward<Args>(args)...);
   }
 
-  template <typename T, typename... Args> T *makeValue(Args &&...args) {
+  template <typename T, typename... Args>
+  T *makeValue(Args &&...args)
+  {
     return alloc<T>(std::forward<Args>(args)...);
   }
 
-  template <typename T, typename... Args> T *makeType(Args &&...args) {
+  template <typename T, typename... Args>
+  T *makeType(Args &&...args)
+  {
     return alloc<T>(std::forward<Args>(args)...);
   }
 
@@ -86,12 +97,15 @@ public:
 
   /// Allocate a fixed list of elements. Intended for pointer and trivial
   /// element types. For AST elements, prefer SpanBuilder.
-  template <typename T> ArenaSpan<T> allocArray(std::initializer_list<T> init) {
+  template <typename T>
+  ArenaSpan<T> allocArray(std::initializer_list<T> init)
+  {
     if (init.size() == 0)
       return {};
     T *arr = allocArrayRaw<T>(init.size());
     size_t i = 0;
-    for (const auto &v : init) {
+    for (const auto &v : init)
+    {
       ::new (&arr[i]) T(v);
       ++i;
     }
@@ -104,7 +118,9 @@ public:
   // a temporary std::vector, then copied into an arena block. The
   // temporary is cleared after `build()`.
 
-  template <typename T> class SpanBuilder {
+  template <typename T>
+  class SpanBuilder
+  {
     ASTArena &arena_;
     std::vector<T> temp_;
 
@@ -114,17 +130,21 @@ public:
     void push_back(T &&v) { temp_.push_back(std::move(v)); }
     void push_back(const T &v) { temp_.push_back(v); }
 
-    template <typename... Args> T &emplace_back(Args &&...args) {
+    template <typename... Args>
+    T &emplace_back(Args &&...args)
+    {
       temp_.emplace_back(std::forward<Args>(args)...);
       return temp_.back();
     }
 
-    ArenaSpan<T> build() {
+    ArenaSpan<T> build()
+    {
       if (temp_.empty())
         return {};
       const size_t n = temp_.size();
       T *dst = arena_.allocArrayRaw<T>(n);
-      for (size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i)
+      {
         // Placement-new, not assignment. The destination has not
         // been constructed; assigning into raw storage is UB for
         // any non-trivial type.
@@ -142,39 +162,47 @@ public:
     const T &operator[](size_t i) const { return temp_[i]; }
   };
 
-  template <typename T> SpanBuilder<T> makeBuilder() {
+  template <typename T>
+  SpanBuilder<T> makeBuilder()
+  {
     return SpanBuilder<T>(*this);
   }
 
   // ─── ReservedSpanBuilder ──────────────────────────────────────────
   //
   // A builder that pre-reserves the temporary vector. Useful when the
-  // element count is known ahead of time (a composite's input list, a
-  // node's argument list).
+  // element count is known ahead of time
 
-  template <typename T> class ReservedSpanBuilder {
+  template <typename T>
+  class ReservedSpanBuilder
+  {
     ASTArena &arena_;
     std::vector<T> temp_;
 
   public:
-    ReservedSpanBuilder(ASTArena &a, size_t reserve) : arena_(a) {
+    ReservedSpanBuilder(ASTArena &a, size_t reserve) : arena_(a)
+    {
       temp_.reserve(reserve);
     }
 
     void push_back(T &&v) { temp_.push_back(std::move(v)); }
     void push_back(const T &v) { temp_.push_back(v); }
 
-    template <typename... Args> T &emplace_back(Args &&...args) {
+    template <typename... Args>
+    T &emplace_back(Args &&...args)
+    {
       temp_.emplace_back(std::forward<Args>(args)...);
       return temp_.back();
     }
 
-    ArenaSpan<T> build() {
+    ArenaSpan<T> build()
+    {
       if (temp_.empty())
         return {};
       const size_t n = temp_.size();
       T *dst = arena_.allocArrayRaw<T>(n);
-      for (size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i)
+      {
         ::new (&dst[i]) T(std::move(temp_[i]));
       }
       temp_.clear();
@@ -190,12 +218,15 @@ public:
     const T &operator[](size_t i) const { return temp_[i]; }
   };
 
-  template <typename T> ReservedSpanBuilder<T> makeBuilder(size_t reserve) {
+  template <typename T>
+  ReservedSpanBuilder<T> makeBuilder(size_t reserve)
+  {
     return ReservedSpanBuilder<T>(*this, reserve);
   }
 
   template <typename T>
-  ReservedSpanBuilder<T> makeReservedBuilder(size_t reserve) {
+  ReservedSpanBuilder<T> makeReservedBuilder(size_t reserve)
+  {
     return ReservedSpanBuilder<T>(*this, reserve);
   }
 
@@ -206,17 +237,22 @@ public:
   // copies into the arena).
 
   /// An empty span.
-  template <typename T> static ArenaSpan<T> emptySpan() { return {}; }
+  template <typename T>
+  static ArenaSpan<T> emptySpan() { return {}; }
 
   /// A span of one element.
-  template <typename T> ArenaSpan<T> makeSpan(const T &v) {
+  template <typename T>
+  ArenaSpan<T> makeSpan(const T &v)
+  {
     auto b = makeBuilder<T>();
     b.push_back(v);
     return b.build();
   }
 
   /// A span from an initializer list.
-  template <typename T> ArenaSpan<T> makeSpan(std::initializer_list<T> init) {
+  template <typename T>
+  ArenaSpan<T> makeSpan(std::initializer_list<T> init)
+  {
     if (init.size() == 0)
       return {};
     auto b = makeBuilder<T>(init.size());
@@ -226,7 +262,9 @@ public:
   }
 
   /// A span copied from a vector.
-  template <typename T> ArenaSpan<T> makeSpan(const std::vector<T> &items) {
+  template <typename T>
+  ArenaSpan<T> makeSpan(const std::vector<T> &items)
+  {
     if (items.empty())
       return {};
     auto b = makeBuilder<T>(items.size());
@@ -236,7 +274,9 @@ public:
   }
 
   /// A span copied from another span.
-  template <typename T> ArenaSpan<T> makeSpan(const ArenaSpan<T> &items) {
+  template <typename T>
+  ArenaSpan<T> makeSpan(const ArenaSpan<T> &items)
+  {
     if (items.empty())
       return {};
     auto b = makeBuilder<T>(items.size());
@@ -247,7 +287,8 @@ public:
 
   /// A span built by transforming a range.
   template <typename T, typename Iter, typename Fn>
-  ArenaSpan<T> makeSpan(Iter begin, Iter end, Fn transform) {
+  ArenaSpan<T> makeSpan(Iter begin, Iter end, Fn transform)
+  {
     if (begin == end)
       return {};
     auto b = makeBuilder<T>();
@@ -258,7 +299,8 @@ public:
 
   /// A span built by transforming a vector.
   template <typename T, typename U, typename Fn>
-  ArenaSpan<T> makeSpan(const std::vector<U> &items, Fn transform) {
+  ArenaSpan<T> makeSpan(const std::vector<U> &items, Fn transform)
+  {
     if (items.empty())
       return {};
     auto b = makeBuilder<T>(items.size());
@@ -269,7 +311,8 @@ public:
 
   /// A span built by transforming a span.
   template <typename T, typename U, typename Fn>
-  ArenaSpan<T> makeSpan(const ArenaSpan<U> &items, Fn transform) {
+  ArenaSpan<T> makeSpan(const ArenaSpan<U> &items, Fn transform)
+  {
     if (items.empty())
       return {};
     auto b = makeBuilder<T>(items.size());
@@ -281,14 +324,16 @@ public:
   // ─── Concatenation ────────────────────────────────────────────────
 
   template <typename T>
-  ArenaSpan<T> concatSpans(std::initializer_list<ArenaSpan<T>> spans) {
+  ArenaSpan<T> concatSpans(std::initializer_list<ArenaSpan<T>> spans)
+  {
     size_t total = 0;
     for (const auto &s : spans)
       total += s.size();
     if (total == 0)
       return {};
     auto b = makeBuilder<T>(total);
-    for (const auto &s : spans) {
+    for (const auto &s : spans)
+    {
       for (const auto &v : s)
         b.push_back(v);
     }
@@ -296,12 +341,14 @@ public:
   }
 
   template <typename T>
-  ArenaSpan<T> concatSpans(const ArenaSpan<T> &a, const ArenaSpan<T> &b) {
+  ArenaSpan<T> concatSpans(const ArenaSpan<T> &a, const ArenaSpan<T> &b)
+  {
     return concatSpans<T>({a, b});
   }
 
   template <typename T>
-  ArenaSpan<T> appendSpan(const ArenaSpan<T> &base, const T &item) {
+  ArenaSpan<T> appendSpan(const ArenaSpan<T> &base, const T &item)
+  {
     auto b = makeBuilder<T>(base.size() + 1);
     for (const auto &v : base)
       b.push_back(v);
@@ -311,7 +358,8 @@ public:
 
   template <typename T>
   ArenaSpan<T> appendSpan(const ArenaSpan<T> &base,
-                          std::initializer_list<T> items) {
+                          std::initializer_list<T> items)
+  {
     auto b = makeBuilder<T>(base.size() + items.size());
     for (const auto &v : base)
       b.push_back(v);
@@ -323,15 +371,18 @@ public:
 private:
   // ─── The allocator ────────────────────────────────────────────────
 
-  char *allocRaw(size_t size, size_t align) {
+  char *allocRaw(size_t size, size_t align)
+  {
     size_t padding = 0;
-    if (currentBlock_) {
+    if (currentBlock_)
+    {
       const uintptr_t addr =
           reinterpret_cast<uintptr_t>(currentBlock_ + currentOffset_);
       padding = (align - (addr % align)) % align;
     }
 
-    if (!currentBlock_ || currentOffset_ + padding + size > kBlockSize) {
+    if (!currentBlock_ || currentOffset_ + padding + size > kBlockSize)
+    {
       const size_t allocSize = std::max(kBlockSize, size + align);
       blocks_.push_back(std::make_unique<char[]>(allocSize));
       currentBlock_ = blocks_.back().get();
@@ -346,7 +397,9 @@ private:
     return p;
   }
 
-  template <typename T> T *allocArrayRaw(size_t n) {
+  template <typename T>
+  T *allocArrayRaw(size_t n)
+  {
     if (n == 0)
       return nullptr;
     return reinterpret_cast<T *>(allocRaw(sizeof(T) * n, alignof(T)));

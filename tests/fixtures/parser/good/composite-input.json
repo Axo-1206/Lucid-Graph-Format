@@ -1,1 +1,0 @@
-{"kind":"Module","loc":{"line":1,"col":1},"filePath":"composite-input.lucid","declarations":[{"kind":"CompositeDecl","loc":{"line":2,"col":1},"name":"Health","inputs":[{"kind":"CompositeInput","loc":{"line":3,"col":13},"name":"max","type":{"kind":"TypeId","loc":{"line":3,"col":18},"qualifier":null,"name":"int"}}],"outputs":[],"body":[],"attributes":[]}]}

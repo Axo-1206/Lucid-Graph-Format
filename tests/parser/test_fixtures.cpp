@@ -164,20 +164,6 @@ namespace
             return "Syntax_ExpectedNodeArgList";
         case DiagCode::Syntax_ExpectedTriggerList:
             return "Syntax_ExpectedTriggerList";
-        case DiagCode::Syntax_ExpectedCompositeName:
-            return "Syntax_ExpectedCompositeName";
-        case DiagCode::Syntax_ExpectedCompositeBody:
-            return "Syntax_ExpectedCompositeBody";
-        case DiagCode::Syntax_ExpectedInputBlock:
-            return "Syntax_ExpectedInputBlock";
-        case DiagCode::Syntax_ExpectedOutputBlock:
-            return "Syntax_ExpectedOutputBlock";
-        case DiagCode::Syntax_ExpectedInputField:
-            return "Syntax_ExpectedInputField";
-        case DiagCode::Syntax_ExpectedOutputField:
-            return "Syntax_ExpectedOutputField";
-        case DiagCode::Syntax_ExpectedOutputBinding:
-            return "Syntax_ExpectedOutputBinding";
         case DiagCode::Syntax_ExpectedValue:
             return "Syntax_ExpectedValue";
         case DiagCode::Syntax_ExpectedFieldAccess:
@@ -276,7 +262,7 @@ TEST_CASE("fixtures/good: parse and dump match stored JSON",
         if (expected.empty())
         {
             FAIL("missing or empty .json file for " << fileName
-                 << " — run `cmake --build build --target regen-fixtures`");
+                                                    << " — run `cmake --build build --target regen-fixtures`");
             continue;
         }
         CHECK(actual == expected);

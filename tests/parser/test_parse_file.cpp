@@ -8,8 +8,8 @@
 /// diagnostics, and the error recovery behavior.
 ///
 /// The tests here are the parser's integration tests. The unit tests
-/// (test_parse_type, test_parse_value, test_parse_node, test_parse_decl,
-/// test_parse_composite) test the individual rules/ functions; these
+/// (test_parse_type, test_parse_value, test_parse_node, test_parse_decl)
+/// test the individual rules/ functions; these
 /// tests check that the whole pipeline — lexer, top-level loop, recovery,
 /// module construction — works together.
 ///
@@ -164,25 +164,6 @@ TEST_CASE("parseFile parses a single node", "[parse-file]")
     CHECK_FALSE(module->hasErrors);
 }
 
-TEST_CASE("parseFile parses a composite with all three sections",
-          "[parse-file]")
-{
-    Fixture f;
-    const char *source =
-        "composite Health {\n"
-        "    input { max: int }\n"
-        "    output { current: int = State.current }\n"
-        "    resource State { current: int = 0 }\n"
-        "    node init = SetOnStart(State.current, max)\n"
-        "}\n";
-    ModuleAST *module = f.run(source);
-
-    REQUIRE(module != nullptr);
-    REQUIRE(module->declCount() == 1);
-    CHECK(module->decls[0]->isa<CompositeDeclAST>());
-    CHECK_FALSE(module->hasErrors);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Multiple declarations, in order
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,22 +231,6 @@ TEST_CASE("parseFile attaches attributes to a resource", "[parse-file]")
     auto *res = module->decls[0]->as<ResourceDeclAST>();
     REQUIRE(res->attributes.size() == 1);
     CHECK(f.pool.lookupView(res->attributes[0]->name) ==
-          std::string_view{"export"});
-}
-
-TEST_CASE("parseFile attaches attributes to a composite", "[parse-file]")
-{
-    Fixture f;
-    const char *source =
-        "@export\n"
-        "composite Health { }\n";
-    ModuleAST *module = f.run(source);
-
-    REQUIRE(module != nullptr);
-    REQUIRE(module->declCount() == 1);
-    auto *comp = module->decls[0]->as<CompositeDeclAST>();
-    REQUIRE(comp->attributes.size() == 1);
-    CHECK(f.pool.lookupView(comp->attributes[0]->name) ==
           std::string_view{"export"});
 }
 
@@ -395,48 +360,6 @@ TEST_CASE("parseFile's module location is set", "[parse-file]")
     CHECK(module->loc.column() == 1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// A realistic composite
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("parseFile parses a realistic composite and use site",
-          "[parse-file]")
-{
-    Fixture f;
-    // This is close to the example in Grammar.md §2.7.
-    const char *source =
-        "@export\n"
-        "composite Health {\n"
-        "    input { max: int }\n"
-        "    output {\n"
-        "        current:  int   = State.current\n"
-        "        on_death: Event = dead\n"
-        "    }\n"
-        "    resource State { current: int = 0 }\n"
-        "    node init = SetOnStart(State.current, max)\n"
-        "    node check = LessNode(State.current, 1)\n"
-        "    node dead  = When(check)\n"
-        "}\n"
-        "\n"
-        "node player_health = health.Health(100)\n";
-    ModuleAST *module = f.run(source);
-
-    REQUIRE(module != nullptr);
-    REQUIRE(module->declCount() == 2);
-    CHECK(module->decls[0]->isa<CompositeDeclAST>());
-    CHECK(module->decls[1]->isa<NodeDeclAST>());
-
-    auto *comp = module->decls[0]->as<CompositeDeclAST>();
-    REQUIRE(comp->attributes.size() == 1);
-    CHECK(f.pool.lookupView(comp->attributes[0]->name) ==
-          std::string_view{"export"});
-    CHECK(comp->inputs.size() == 1);
-    CHECK(comp->outputs.size() == 2);
-    CHECK(comp->body.size() == 4);
-
-    CHECK_FALSE(module->hasErrors);
-}
-
 TEST_CASE("parseFile reports a non-declaration token at the top level",
           "[parse-file]")
 {
@@ -457,27 +380,4 @@ TEST_CASE("parseFile reports a non-declaration token at the top level",
         }
     }
     CHECK(found);
-}
-
-TEST_CASE("parseFile parses a composite body with resource and nodes",
-          "[parse-file]")
-{
-    Fixture f;
-    const char *source =
-        "composite Health {\n"
-        "    resource State { current: int = 0 }\n"
-        "    node init = SetOnStart(State.current, max)\n"
-        "    node check = LessNode(State.current, 1)\n"
-        "    node dead  = When(check)\n"
-        "}\n";
-    ModuleAST *module = f.run(source);
-
-    REQUIRE(module != nullptr);
-    REQUIRE(module->declCount() == 1);
-    auto *comp = module->decls[0]->as<CompositeDeclAST>();
-    REQUIRE(comp->body.size() == 4);
-    CHECK(comp->body[0]->isa<ResourceDeclAST>());
-    CHECK(comp->body[1]->isa<NodeDeclAST>());
-    CHECK(comp->body[2]->isa<NodeDeclAST>());
-    CHECK(comp->body[3]->isa<NodeDeclAST>());
 }

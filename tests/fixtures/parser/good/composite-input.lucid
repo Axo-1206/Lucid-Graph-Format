@@ -1,4 +1,0 @@
--- A composite with a single input.
-composite Health {
-    input { max: int }
-}

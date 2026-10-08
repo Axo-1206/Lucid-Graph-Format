@@ -27,8 +27,8 @@
 ///
 /// ─── The shared dispatcher ────────────────────────────────────────────────
 /// `parseDeclByKeyword` is the "which parser for which keyword" switch.
-/// It is shared between the top-level dispatch and the composite-body
-/// dispatch. It is declared in ParseDeclInternal.hpp, not Parser.hpp,
+/// It is shared between the top-level dispatch.
+/// It is declared in ParseDeclInternal.hpp, not Parser.hpp,
 /// because it is not part of the parser's public API.
 
 #include "parser/Parser.hpp"
@@ -57,11 +57,9 @@ namespace lucid::parser
             return parseResourceDecl(stream, ctx);
         case TokenType::KW_NODE:
             return parseNodeDecl(stream, ctx);
-        case TokenType::KW_COMPOSITE:
-            return parseCompositeDecl(stream, ctx);
         default:
-            // The caller has already checked canStartTopDecl (or the
-            // composite-body equivalent). parseEnumMemberList here is a caller bug,
+            // The caller has already checked canStartTopDecl
+            // parseEnumMemberList here is a caller bug,
             // not a user error. Report internally and return nullptr so
             // the caller's loop can recover.
             ctx.diag.errorAt(DiagCode::Internal_Assertion,

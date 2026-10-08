@@ -223,48 +223,6 @@ TEST_CASE("dumpModule dumps an attribute", "[json-dumper]")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Composites
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("dumpModule dumps an empty composite", "[json-dumper]")
-{
-    Fixture f;
-    const std::string json = f.dump("composite C { }");
-    CHECK(json.find(R"("kind":"CompositeDecl")") != std::string::npos);
-    CHECK(json.find(R"("inputs":[])") != std::string::npos);
-    CHECK(json.find(R"("outputs":[])") != std::string::npos);
-    CHECK(json.find(R"("body":[])") != std::string::npos);
-}
-
-TEST_CASE("dumpModule dumps a composite input", "[json-dumper]")
-{
-    Fixture f;
-    const std::string json = f.dump("composite C { input { max: int } }");
-    CHECK(json.find(R"("kind":"CompositeInput")") != std::string::npos);
-    CHECK(json.find(R"("name":"max")") != std::string::npos);
-}
-
-TEST_CASE("dumpModule dumps a composite output", "[json-dumper]")
-{
-    Fixture f;
-    const std::string json =
-        f.dump("composite C { output { current: int = State.current } }");
-    CHECK(json.find(R"("kind":"CompositeOutput")") != std::string::npos);
-    CHECK(json.find(R"("kind":"FieldAccessValue")") != std::string::npos);
-    CHECK(json.find(R"("object":"State")") != std::string::npos);
-    CHECK(json.find(R"("field":"current")") != std::string::npos);
-}
-
-TEST_CASE("dumpModule dumps a composite body", "[json-dumper]")
-{
-    Fixture f;
-    const std::string json =
-        f.dump("composite C { resource State { x: int } }");
-    CHECK(json.find(R"("kind":"ResourceDecl")") != std::string::npos);
-    CHECK(json.find(R"("body":[)") != std::string::npos);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Unknown
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -10,20 +10,12 @@
 ///               the canonical spelling (`float32`, not `float`).
 ///   Enum      — a host-declared enum, like `Key` or `Direction`.
 ///   Handle    — a host-declared handle, like `BodyRef` or `TextureRef`.
-///   Event     — the type of a composite output that exposes a trigger.
-///               Never a value; legal only as a composite output type
-///               and as the target of an `on` clause.
 ///
 /// ─── The name is always present ───────────────────────────────────────────
 /// Even for primitives, the name is stored. `TypeId{Primitive, "float32"}`
 /// is the canonical form. Sema normalizes aliases (`float` → `float32`)
 /// before constructing a TypeId, so the name field is always the
 /// canonical spelling.
-///
-/// ─── Event is special ─────────────────────────────────────────────────────
-/// Event is not a value type (Grammar.md §2.9). It appears only as a
-/// composite output's declared type. Sema rejects it in every other
-/// position. TypeId::Kind::Event is the tagged representation.
 #pragma once
 
 #include <cstdint>
@@ -37,7 +29,7 @@ namespace lucid::sema
     {
         enum class Kind : uint8_t
         {
-            Invalid,     // default-constructed; not a valid type
+            Invalid, // default-constructed; not a valid type
             Primitive,
             Enum,
             Handle,
@@ -83,44 +75,49 @@ namespace lucid::sema
 
         // ─── Queries ───────────────────────────────────────────────────────
 
-        bool isValid()     const noexcept { return kind != Kind::Invalid; }
+        bool isValid() const noexcept { return kind != Kind::Invalid; }
         bool isPrimitive() const noexcept { return kind == Kind::Primitive; }
-        bool isEnum()      const noexcept { return kind == Kind::Enum; }
-        bool isHandle()    const noexcept { return kind == Kind::Handle; }
-        bool isEvent()     const noexcept { return kind == Kind::Event; }
+        bool isEnum() const noexcept { return kind == Kind::Enum; }
+        bool isHandle() const noexcept { return kind == Kind::Handle; }
+        bool isEvent() const noexcept { return kind == Kind::Event; }
 
         /// True if this is a value type: primitive, enum, or handle.
         /// Event is not a value type.
         bool isValue() const noexcept
         {
             return kind == Kind::Primitive ||
-                   kind == Kind::Enum      ||
+                   kind == Kind::Enum ||
                    kind == Kind::Handle;
         }
 
         // ─── Comparison ────────────────────────────────────────────────────
 
-        bool operator==(const TypeId& other) const noexcept
+        bool operator==(const TypeId &other) const noexcept
         {
             return kind == other.kind && name == other.name;
         }
 
-        bool operator!=(const TypeId& other) const noexcept
+        bool operator!=(const TypeId &other) const noexcept
         {
             return !(*this == other);
         }
     };
 
     /// @brief The name of a TypeId::Kind, for diagnostics.
-    inline const char* typeKindName(TypeId::Kind k) noexcept
+    inline const char *typeKindName(TypeId::Kind k) noexcept
     {
         switch (k)
         {
-        case TypeId::Kind::Invalid:   return "Invalid";
-        case TypeId::Kind::Primitive: return "Primitive";
-        case TypeId::Kind::Enum:      return "Enum";
-        case TypeId::Kind::Handle:    return "Handle";
-        case TypeId::Kind::Event:     return "Event";
+        case TypeId::Kind::Invalid:
+            return "Invalid";
+        case TypeId::Kind::Primitive:
+            return "Primitive";
+        case TypeId::Kind::Enum:
+            return "Enum";
+        case TypeId::Kind::Handle:
+            return "Handle";
+        case TypeId::Kind::Event:
+            return "Event";
         }
         return "Unknown";
     }

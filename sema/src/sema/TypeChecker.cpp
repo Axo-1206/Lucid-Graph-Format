@@ -477,8 +477,6 @@ namespace lucid::sema
             return TypeId{};
         }
 
-        const BaseAST *target = m_resolutions.lookup(node->type);
-
         // Otherwise, the type name should resolve to a node type in
         // the registry.
         const std::string_view nodeTypeName = name(node->type->name);

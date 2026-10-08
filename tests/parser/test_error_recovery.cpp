@@ -398,8 +398,7 @@ TEST_CASE("synchronizeUntilDepth gives the predicate access to the stream",
           "[error-recovery]")
 {
     // The predicate stops when the current token is IDENTIFIER and the
-    // next token is COMMA. This is the kind of lookahead the composite-
-    // body scan needs. The stream is `a , b ,`. The first identifier is
+    // next token is COMMA. The stream is `a , b ,`. The first identifier is
     // followed by a comma, so the scan stops on `a`.
     StringPool pool;
     TokenStream stream(makeTokens({
@@ -425,10 +424,6 @@ TEST_CASE("synchronizeUntilDepth returns Matched on a foreign closer "
           "when the predicate says so",
           "[error-recovery]")
 {
-    // The composite-body scan wants to stop on the composite's closing
-    // `}` even though, from the scanner's point of view, that `}` is a
-    // foreign closer (there is no `{` on the scan's stack). The predicate
-    // must be consulted before the scanner returns ForeignCloser.
     StringPool pool;
     TokenStream stream(makeTokens({
         TokenType::IDENTIFIER,

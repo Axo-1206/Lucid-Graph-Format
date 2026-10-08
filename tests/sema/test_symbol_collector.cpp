@@ -141,18 +141,6 @@ TEST_CASE("collectSymbols collects a node", "[sema][symbol-collector]")
     CHECK(s->kind == SymbolKind::Node);
 }
 
-TEST_CASE("collectSymbols collects a composite",
-          "[sema][symbol-collector]")
-{
-    Fixture f;
-    SymbolTable table = f.collect("composite Health { input { max: int } }");
-
-    REQUIRE(table.size() == 1);
-    const auto *s = table.find(f.pool.intern("Health"));
-    REQUIRE(s != nullptr);
-    CHECK(s->kind == SymbolKind::Composite);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Multiple symbols and order
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,15 +152,13 @@ TEST_CASE("collectSymbols preserves declaration order",
     const char *source =
         "enum Direction { N, S, E, W }\n"
         "resource Player { hp: int }\n"
-        "node speed = Float32Node(1.0)\n"
-        "composite Health { input { max: int } }\n";
+        "node speed = Float32Node(1.0)\n";
     SymbolTable table = f.collect(source);
 
-    REQUIRE(table.size() == 4);
+    REQUIRE(table.size() == 3);
     CHECK(table.all()[0].kind == SymbolKind::Enum);
     CHECK(table.all()[1].kind == SymbolKind::Resource);
     CHECK(table.all()[2].kind == SymbolKind::Node);
-    CHECK(table.all()[3].kind == SymbolKind::Composite);
 }
 
 TEST_CASE("collectSymbols reports a duplicate",
@@ -224,23 +210,4 @@ TEST_CASE("collectSymbols skips UnknownAST nodes",
     const auto *good = table.find(f.pool.intern("good"));
     REQUIRE(good != nullptr);
     CHECK(good->kind == SymbolKind::Node);
-}
-
-TEST_CASE("collectSymbols does not descend into composites",
-          "[sema][symbol-collector]")
-{
-    Fixture f;
-    // The composite's internal resource and node are not top-level
-    // symbols. Only the composite's name is.
-    const char *source =
-        "composite Health {\n"
-        "  resource State { current: int = 0 }\n"
-        "  node init = SetOnStart(State.current, 0)\n"
-        "}\n";
-    SymbolTable table = f.collect(source);
-
-    REQUIRE(table.size() == 1);
-    CHECK(table.find(f.pool.intern("Health")) != nullptr);
-    CHECK(table.find(f.pool.intern("State")) == nullptr);
-    CHECK(table.find(f.pool.intern("init")) == nullptr);
 }

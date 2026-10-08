@@ -20,7 +20,7 @@ TEST_CASE("TokenType: EOF is the zero value", "[core][tokens]")
 
 TEST_CASE("TokenType: every keyword is contiguous", "[core][tokens]")
 {
-    REQUIRE(static_cast<uint16_t>(TokenType::KW_IMPORT) <= static_cast<uint16_t>(TokenType::KW_OUTPUT));
+    REQUIRE(static_cast<uint16_t>(TokenType::KW_IMPORT) <= static_cast<uint16_t>(TokenType::KW_ON));
 }
 
 TEST_CASE("TokenType: every literal is contiguous", "[core][tokens]")
@@ -44,10 +44,7 @@ TEST_CASE("isKeyword: true for the nine keywords", "[core][tokens]")
     REQUIRE(isKeyword(TokenType::KW_ENUM));
     REQUIRE(isKeyword(TokenType::KW_RESOURCE));
     REQUIRE(isKeyword(TokenType::KW_NODE));
-    REQUIRE(isKeyword(TokenType::KW_COMPOSITE));
     REQUIRE(isKeyword(TokenType::KW_ON));
-    REQUIRE(isKeyword(TokenType::KW_INPUT));
-    REQUIRE(isKeyword(TokenType::KW_OUTPUT));
 }
 
 TEST_CASE("isKeyword: false for non-keywords", "[core][tokens]")
@@ -70,7 +67,6 @@ TEST_CASE("isDeclarationKeyword: true for the five declaration keywords",
     REQUIRE(isDeclarationKeyword(TokenType::KW_ENUM));
     REQUIRE(isDeclarationKeyword(TokenType::KW_RESOURCE));
     REQUIRE(isDeclarationKeyword(TokenType::KW_NODE));
-    REQUIRE(isDeclarationKeyword(TokenType::KW_COMPOSITE));
 }
 
 TEST_CASE("isDeclarationKeyword: false for other keywords",
@@ -78,28 +74,6 @@ TEST_CASE("isDeclarationKeyword: false for other keywords",
 {
     REQUIRE_FALSE(isDeclarationKeyword(TokenType::KW_FROM));
     REQUIRE_FALSE(isDeclarationKeyword(TokenType::KW_ON));
-    REQUIRE_FALSE(isDeclarationKeyword(TokenType::KW_INPUT));
-    REQUIRE_FALSE(isDeclarationKeyword(TokenType::KW_OUTPUT));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// isCompositeBodyKeyword
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("isCompositeBodyKeyword: true for on/input/output",
-          "[core][tokens]")
-{
-    REQUIRE(isCompositeBodyKeyword(TokenType::KW_ON));
-    REQUIRE(isCompositeBodyKeyword(TokenType::KW_INPUT));
-    REQUIRE(isCompositeBodyKeyword(TokenType::KW_OUTPUT));
-}
-
-TEST_CASE("isCompositeBodyKeyword: false for declaration keywords",
-          "[core][tokens]")
-{
-    REQUIRE_FALSE(isCompositeBodyKeyword(TokenType::KW_IMPORT));
-    REQUIRE_FALSE(isCompositeBodyKeyword(TokenType::KW_NODE));
-    REQUIRE_FALSE(isCompositeBodyKeyword(TokenType::KW_COMPOSITE));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,7 +94,6 @@ TEST_CASE("isLiteral: false for identifier and keywords", "[core][tokens]")
 {
     REQUIRE_FALSE(isLiteral(TokenType::IDENTIFIER));
     REQUIRE_FALSE(isLiteral(TokenType::KW_NODE));
-    REQUIRE_FALSE(isLiteral(TokenType::KW_OUTPUT));
     REQUIRE_FALSE(isLiteral(TokenType::LPAREN));
 }
 
@@ -235,7 +208,6 @@ TEST_CASE("tokenTypeName: returns a spelling for every token",
           "[core][tokens][names]")
 {
     REQUIRE(std::string_view(tokenTypeName(TokenType::KW_IMPORT)) == "import");
-    REQUIRE(std::string_view(tokenTypeName(TokenType::KW_COMPOSITE)) == "composite");
     REQUIRE(std::string_view(tokenTypeName(TokenType::LPAREN)) == "(");
     REQUIRE(std::string_view(tokenTypeName(TokenType::AT_SIGN)) == "@");
     REQUIRE(std::string_view(tokenTypeName(TokenType::EOF_TOKEN)) == "EOF");

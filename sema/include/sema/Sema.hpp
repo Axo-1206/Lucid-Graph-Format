@@ -18,10 +18,8 @@
 ///   3. Resolve names, per module.
 ///   4. Type-check every node and value.
 ///   5. Enforce the Event rules.
-///   6. Expand composites.
-///   7. Detect cycles among value nodes and among composites.
-///   8. Detect dead code (unused value nodes, un-on'd action nodes).
-///   9. Compute execution order and build the Graph.
+///   6. Detect dead code (unused value nodes, un-on'd action nodes).
+///   7. Compute execution order and build the Graph.
 ///
 /// If any step reports an error, subsequent steps are skipped.
 
@@ -54,8 +52,8 @@ namespace lucid::sema
 
     struct CompileResult
     {
-        bool                     ok = false;
-        std::unique_ptr<Graph>   graph;
+        bool ok = false;
+        std::unique_ptr<Graph> graph;
         std::vector<lucid::diag::Diagnostic> diagnostics;
     };
 
@@ -63,14 +61,14 @@ namespace lucid::sema
 
     CompileResult compile(std::string_view source,
                           std::string_view filename,
-                          const Registry& registry,
+                          const Registry &registry,
                           CompileOptions options = {});
 
-    CompileResult compileModule(const ModuleAST* module,
+    CompileResult compileModule(const ModuleAST *module,
                                 std::string_view source,
                                 std::string_view filename,
-                                StringPool& pool,
-                                const Registry& registry,
+                                StringPool &pool,
+                                const Registry &registry,
                                 CompileOptions options = {});
 
 } // namespace lucid::sema

@@ -1,6 +1,3 @@
-import core.keys
-import health
-
 @export
 enum Direction {
     North,
@@ -14,37 +11,12 @@ resource PlayerConfig {
     speed: float = 200.0
     jump_force: float = -400.0
     max_hp: int = 100
-    key_left: core.Key
+    key_left: Direction = Direction.North
+    key_right: Direction = Direction.South
 }
 
 node body = BodyNode(player)
-node input_x = InputAxis1D(Key.A, Key.D)
+node input_x = InputAxis1D(Direction.North, Direction.South)
 node on_hit = OnCollision(body, "hazard")
 node play_sfx = PlaySound("hit.wav") on on_hit
 node damage = Damage(body, 10) on on_hit, on_other
-
-@export
-composite Health {
-    input {
-        max: int
-    }
-
-    output {
-        current: int = State.current
-        percent: float = DivideNode(State.current, State.max)
-        on_death: Event = dead
-    }
-
-    resource State {
-        current: int = 0
-        max: int = 0
-    }
-
-    node init_max = SetOnStart(State.max, max)
-    node init_cur = SetOnStart(State.current, max)
-    node check = LessNode(State.current, 1)
-    node dead = When(check)
-}
-
-node player_health = Health(100)
-node respawn = RespawnPlayer() on player_health

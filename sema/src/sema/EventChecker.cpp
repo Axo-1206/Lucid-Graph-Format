@@ -123,7 +123,6 @@ namespace lucid::sema
             checkNodeDecl(decl->as<NodeDeclAST>());
             break;
         default:
-            // Composite bodies are checked in Step 7.6.
             break;
         }
     }

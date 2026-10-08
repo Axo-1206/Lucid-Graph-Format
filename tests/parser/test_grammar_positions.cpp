@@ -21,7 +21,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-using lucid::parser::canStartCompositeBodyDecl;
 using lucid::parser::canStartTopDecl;
 using lucid::parser::canStartType;
 using lucid::parser::canStartValue;
@@ -57,79 +56,7 @@ namespace
             return true;
         case TokenType::KW_NODE:
             return true;
-        case TokenType::KW_COMPOSITE:
-            return true;
         case TokenType::KW_ON:
-            return false;
-        case TokenType::KW_INPUT:
-            return false;
-        case TokenType::KW_OUTPUT:
-            return false;
-        case TokenType::INT_LITERAL:
-            return false;
-        case TokenType::FLOAT_LITERAL:
-            return false;
-        case TokenType::STRING_LITERAL:
-            return false;
-        case TokenType::CHAR_LITERAL:
-            return false;
-        case TokenType::BOOL_LITERAL:
-            return false;
-        case TokenType::NIL_LITERAL:
-            return false;
-        case TokenType::LPAREN:
-            return false;
-        case TokenType::RPAREN:
-            return false;
-        case TokenType::LBRACE:
-            return false;
-        case TokenType::RBRACE:
-            return false;
-        case TokenType::LBRACKET:
-            return false;
-        case TokenType::RBRACKET:
-            return false;
-        case TokenType::COMMA:
-            return false;
-        case TokenType::DOT:
-            return false;
-        case TokenType::COLON:
-            return false;
-        case TokenType::EQUALS:
-            return false;
-        case TokenType::AT_SIGN:
-            return true;
-        }
-        return false;
-    }
-
-    constexpr bool compositeBodyExpected(TokenType t) noexcept
-    {
-        switch (t)
-        {
-        case TokenType::EOF_TOKEN:
-            return false;
-        case TokenType::UNKNOWN:
-            return false;
-        case TokenType::IDENTIFIER:
-            return false;
-        case TokenType::KW_IMPORT:
-            return true;
-        case TokenType::KW_FROM:
-            return false;
-        case TokenType::KW_ENUM:
-            return true;
-        case TokenType::KW_RESOURCE:
-            return true;
-        case TokenType::KW_NODE:
-            return true;
-        case TokenType::KW_COMPOSITE:
-            return false; // nested composite: syntax error
-        case TokenType::KW_ON:
-            return false;
-        case TokenType::KW_INPUT:
-            return false;
-        case TokenType::KW_OUTPUT:
             return false;
         case TokenType::INT_LITERAL:
             return false;
@@ -189,13 +116,7 @@ namespace
             return false;
         case TokenType::KW_NODE:
             return false;
-        case TokenType::KW_COMPOSITE:
-            return false;
         case TokenType::KW_ON:
-            return false;
-        case TokenType::KW_INPUT:
-            return false;
-        case TokenType::KW_OUTPUT:
             return false;
         case TokenType::INT_LITERAL:
             return true;
@@ -255,13 +176,7 @@ namespace
             return false;
         case TokenType::KW_NODE:
             return false;
-        case TokenType::KW_COMPOSITE:
-            return false;
         case TokenType::KW_ON:
-            return false;
-        case TokenType::KW_INPUT:
-            return false;
-        case TokenType::KW_OUTPUT:
             return false;
         case TokenType::INT_LITERAL:
             return false;
@@ -318,18 +233,6 @@ TEST_CASE("canStartTopDecl matches the grammar's top_decl start set",
     }
 }
 
-TEST_CASE("canStartCompositeBodyDecl matches the grammar's "
-          "composite_body_decl start set",
-          "[grammar-positions]")
-{
-    for (int i = 0; i <= static_cast<int>(TokenType::AT_SIGN); ++i)
-    {
-        const auto t = static_cast<TokenType>(i);
-        INFO("TokenType value: " << i);
-        CHECK(canStartCompositeBodyDecl(t) == compositeBodyExpected(t));
-    }
-}
-
 TEST_CASE("canStartValue matches the grammar's value start set",
           "[grammar-positions]")
 {
@@ -359,29 +262,12 @@ TEST_CASE("canStartType matches the grammar's type_id start set",
 // The exhaustive tables above are the real test. These are the cases a
 // reader wants to see stated by name when they open the file.
 
-TEST_CASE("AT_SIGN begins an attribute, and thus a top_decl "
-          "and a composite_body_decl",
-          "[grammar-positions]")
-{
-    CHECK(canStartTopDecl(TokenType::AT_SIGN));
-    CHECK(canStartCompositeBodyDecl(TokenType::AT_SIGN));
-}
-
-TEST_CASE("KW_COMPOSITE begins a top_decl but not a composite body "
-          "declaration",
-          "[grammar-positions]")
-{
-    CHECK(canStartTopDecl(TokenType::KW_COMPOSITE));
-    CHECK_FALSE(canStartCompositeBodyDecl(TokenType::KW_COMPOSITE));
-}
-
 TEST_CASE("IDENTIFIER begins a value and a type, but not a declaration",
           "[grammar-positions]")
 {
     CHECK(canStartValue(TokenType::IDENTIFIER));
     CHECK(canStartType(TokenType::IDENTIFIER));
     CHECK_FALSE(canStartTopDecl(TokenType::IDENTIFIER));
-    CHECK_FALSE(canStartCompositeBodyDecl(TokenType::IDENTIFIER));
 }
 
 TEST_CASE("Every literal token begins a value and nothing else",
@@ -401,7 +287,6 @@ TEST_CASE("Every literal token begins a value and nothing else",
         CHECK(canStartValue(t));
         CHECK_FALSE(canStartType(t));
         CHECK_FALSE(canStartTopDecl(t));
-        CHECK_FALSE(canStartCompositeBodyDecl(t));
     }
 }
 
@@ -409,7 +294,6 @@ TEST_CASE("KW_FROM begins nothing",
           "[grammar-positions]")
 {
     CHECK_FALSE(canStartTopDecl(TokenType::KW_FROM));
-    CHECK_FALSE(canStartCompositeBodyDecl(TokenType::KW_FROM));
     CHECK_FALSE(canStartValue(TokenType::KW_FROM));
     CHECK_FALSE(canStartType(TokenType::KW_FROM));
 }
@@ -418,7 +302,6 @@ TEST_CASE("EOF_TOKEN begins nothing",
           "[grammar-positions]")
 {
     CHECK_FALSE(canStartTopDecl(TokenType::EOF_TOKEN));
-    CHECK_FALSE(canStartCompositeBodyDecl(TokenType::EOF_TOKEN));
     CHECK_FALSE(canStartValue(TokenType::EOF_TOKEN));
     CHECK_FALSE(canStartType(TokenType::EOF_TOKEN));
 }

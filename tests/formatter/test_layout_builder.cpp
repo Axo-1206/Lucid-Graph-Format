@@ -231,71 +231,6 @@ TEST_CASE("LayoutBuilder formats multiple attributes", "[layout]")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Composites
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("LayoutBuilder formats an empty composite", "[layout]")
-{
-    CHECK(fmt("composite C {}").text == "composite C {\n}\n");
-}
-
-TEST_CASE("LayoutBuilder formats a composite with an input block",
-          "[layout]")
-{
-    CHECK(fmt("composite C { input { max: int } }").text ==
-          "composite C {\n"
-          "    input {\n"
-          "        max: int\n"
-          "    }\n"
-          "}\n");
-}
-
-TEST_CASE("LayoutBuilder formats a composite with an output block",
-          "[layout]")
-{
-    CHECK(fmt("composite C { output { x: int = 0 } }").text ==
-          "composite C {\n"
-          "    output {\n"
-          "        x: int = 0\n"
-          "    }\n"
-          "}\n");
-}
-
-TEST_CASE("LayoutBuilder formats a composite with a body", "[layout]")
-{
-    CHECK(fmt("composite C { resource R { x: int } }").text ==
-          "composite C {\n"
-          "    resource R {\n"
-          "        x: int\n"
-          "    }\n"
-          "}\n");
-}
-
-TEST_CASE("LayoutBuilder separates composite sections by blank lines",
-          "[layout]")
-{
-    CHECK(fmt("composite C {\n"
-              "  input { max: int }\n"
-              "  output { x: int = 0 }\n"
-              "  resource R { x: int }\n"
-              "}\n")
-              .text ==
-          "composite C {\n"
-          "    input {\n"
-          "        max: int\n"
-          "    }\n"
-          "\n"
-          "    output {\n"
-          "        x: int = 0\n"
-          "    }\n"
-          "\n"
-          "    resource R {\n"
-          "        x: int\n"
-          "    }\n"
-          "}\n");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Comments
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -340,8 +275,6 @@ TEST_CASE("LayoutBuilder preserves leading comments on each declaration kind",
     CHECK(fmt("-- a\nresource R {}").text == "-- a\nresource R {\n}\n");
     // Node.
     CHECK(fmt("-- a\nnode a = Foo()").text == "-- a\nnode a = Foo()\n");
-    // Composite.
-    CHECK(fmt("-- a\ncomposite C {}").text == "-- a\ncomposite C {\n}\n");
 }
 
 TEST_CASE("LayoutBuilder preserves a comment before an attribute",
@@ -352,29 +285,6 @@ TEST_CASE("LayoutBuilder preserves a comment before an attribute",
           "@export\n"
           "resource R {\n"
           "}\n");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Idempotence
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("LayoutBuilder output is idempotent", "[layout]")
-{
-    const std::string source =
-        "resource R { hp: int speed: float = 1.5 }\n"
-        "\n"
-        "@export\n"
-        "composite C {\n"
-        "  input { max: int }\n"
-        "  node init = SetOnStart(State.max, max)\n"
-        "}\n"
-        "\n"
-        "-- comment\n"
-        "node player = C(100)\n";
-
-    const std::string first = fmt(source).text;
-    const std::string second = fmt(first).text;
-    CHECK(first == second);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

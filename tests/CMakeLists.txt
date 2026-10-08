@@ -56,7 +56,6 @@ add_executable(test_parser
     parser/test_parse_value.cpp
     parser/test_parse_node.cpp
     parser/test_parse_decl.cpp
-    parser/test_parse_composite.cpp
     parser/test_parse_file.cpp
     parser/test_json_writer.cpp
     parser/test_json_dumper.cpp
@@ -171,7 +170,6 @@ add_executable(test_sema
     sema/test_primitives.cpp
     sema/test_type_map.cpp
     sema/test_type_checker.cpp
-    sema/test_composite_scope.cpp
     sema/test_event_checker.cpp
 )
 

@@ -78,7 +78,6 @@ TEST_CASE("ImportDeclAST: isa distinguishes it from other declarations",
     REQUIRE_FALSE(d.isa<EnumDeclAST>());
     REQUIRE_FALSE(d.isa<ResourceDeclAST>());
     REQUIRE_FALSE(d.isa<NodeDeclAST>());
-    REQUIRE_FALSE(d.isa<CompositeDeclAST>());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,7 +131,6 @@ TEST_CASE("EnumDeclAST: isa distinguishes it from other declarations",
     REQUIRE_FALSE(d.isa<ImportDeclAST>());
     REQUIRE_FALSE(d.isa<ResourceDeclAST>());
     REQUIRE_FALSE(d.isa<NodeDeclAST>());
-    REQUIRE_FALSE(d.isa<CompositeDeclAST>());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -257,7 +255,6 @@ TEST_CASE("ResourceDeclAST: isa distinguishes it from other declarations",
     REQUIRE_FALSE(d.isa<ImportDeclAST>());
     REQUIRE_FALSE(d.isa<EnumDeclAST>());
     REQUIRE_FALSE(d.isa<NodeDeclAST>());
-    REQUIRE_FALSE(d.isa<CompositeDeclAST>());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -352,176 +349,6 @@ TEST_CASE("NodeDeclAST: isa distinguishes it from other declarations",
     REQUIRE_FALSE(d.isa<ImportDeclAST>());
     REQUIRE_FALSE(d.isa<EnumDeclAST>());
     REQUIRE_FALSE(d.isa<ResourceDeclAST>());
-    REQUIRE_FALSE(d.isa<CompositeDeclAST>());
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CompositeInputAST
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("CompositeInputAST: default",
-          "[core][ast][decl][input]")
-{
-    CompositeInputAST in;
-    REQUIRE(in.kind == ASTKind::CompositeInput);
-    REQUIRE(in.isa<CompositeInputAST>());
-    REQUIRE(in.type == nullptr);
-}
-
-TEST_CASE("CompositeInputAST: `max: int`",
-          "[core][ast][decl][input]")
-{
-    ASTArena arena;
-    StringPool pool;
-
-    auto *type = arena.make<TypeIdAST>(pool.intern("int"));
-    CompositeInputAST in{pool.intern("max"), type};
-
-    REQUIRE(pool.lookupView(in.name) == "max");
-    REQUIRE(in.type == type);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CompositeOutputAST
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("CompositeOutputAST: default",
-          "[core][ast][decl][output]")
-{
-    CompositeOutputAST out;
-    REQUIRE(out.kind == ASTKind::CompositeOutput);
-    REQUIRE(out.isa<CompositeOutputAST>());
-    REQUIRE(out.type == nullptr);
-    REQUIRE(out.value == nullptr);
-}
-
-TEST_CASE("CompositeOutputAST: `current: int = State.current`",
-          "[core][ast][decl][output]")
-{
-    ASTArena arena;
-    StringPool pool;
-
-    auto *type = arena.make<TypeIdAST>(pool.intern("int"));
-    auto *value = arena.make<FieldAccessValueAST>(
-        pool.intern("State"), pool.intern("current"));
-
-    CompositeOutputAST out{pool.intern("current"), type, value};
-
-    REQUIRE(pool.lookupView(out.name) == "current");
-    REQUIRE(out.type == type);
-    REQUIRE(out.value == value);
-    REQUIRE(out.value->isa<FieldAccessValueAST>());
-}
-
-TEST_CASE("CompositeOutputAST: `on_death: Event = dead`",
-          "[core][ast][decl][output]")
-{
-    // An event output. The right-hand side is an identifier referring to
-    // a trigger node inside the body.
-    ASTArena arena;
-    StringPool pool;
-
-    auto *type = arena.make<TypeIdAST>(pool.intern("Event"));
-    auto *value = arena.make<IdentifierValueAST>(pool.intern("dead"));
-
-    CompositeOutputAST out{pool.intern("on_death"), type, value};
-
-    REQUIRE(pool.lookupView(out.type->name) == "Event");
-    REQUIRE(out.value->isa<IdentifierValueAST>());
-    REQUIRE(pool.lookupView(out.value->as<IdentifierValueAST>()->name) == "dead");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CompositeDeclAST
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("CompositeDeclAST: default",
-          "[core][ast][decl][composite]")
-{
-    CompositeDeclAST d;
-    REQUIRE(d.kind == ASTKind::CompositeDecl);
-    REQUIRE(d.isa<CompositeDeclAST>());
-    REQUIRE(d.isa<DeclAST>());
-    REQUIRE(d.inputs.empty());
-    REQUIRE(d.outputs.empty());
-    REQUIRE(d.body.empty());
-    REQUIRE_FALSE(d.hasInputs());
-    REQUIRE_FALSE(d.hasOutputs());
-}
-
-TEST_CASE("CompositeDeclAST: the grammar's Health example",
-          "[core][ast][decl][composite]")
-{
-    // A trimmed version of the grammar's §2.7 Health composite:
-    //
-    //     composite Health {
-    //         input  { max: int }
-    //         output { current: int = State.current }
-    //         resource State { current: int = 0 }
-    //     }
-    ASTArena arena;
-    StringPool pool;
-
-    // Input: `max: int`
-    auto *intType = arena.make<TypeIdAST>(pool.intern("int"));
-    auto *maxIn = arena.make<CompositeInputAST>(pool.intern("max"), intType);
-    auto inputs = arena.makeSpan<CompositeInputAST *>({maxIn});
-
-    // Output: `current: int = State.current`
-    auto *currentFA = arena.make<FieldAccessValueAST>(
-        pool.intern("State"), pool.intern("current"));
-    auto *currentOut = arena.make<CompositeOutputAST>(
-        pool.intern("current"), intType, currentFA);
-    auto outputs = arena.makeSpan<CompositeOutputAST *>({currentOut});
-
-    // Body: `resource State { current: int = 0 }`
-    auto *zeroLit = arena.make<LiteralValueAST>(
-        LiteralKind::Int, pool.intern("0"));
-    auto *currentField = arena.make<ResourceFieldAST>(
-        pool.intern("current"), intType, zeroLit);
-    auto stateFields = arena.makeSpan<ResourceFieldAST *>({currentField});
-    auto *stateDecl = arena.make<ResourceDeclAST>(
-        pool.intern("State"), stateFields);
-    auto body = arena.makeSpan<DeclAST *>({stateDecl});
-
-    CompositeDeclAST d{pool.intern("Health"), inputs, outputs, body};
-
-    REQUIRE(pool.lookupView(d.name) == "Health");
-    REQUIRE(d.hasInputs());
-    REQUIRE(d.hasOutputs());
-    REQUIRE(d.inputs.size() == 1);
-    REQUIRE(d.outputs.size() == 1);
-    REQUIRE(d.body.size() == 1);
-
-    REQUIRE(pool.lookupView(d.inputs[0]->name) == "max");
-    REQUIRE(pool.lookupView(d.outputs[0]->name) == "current");
-    REQUIRE(d.body[0]->isa<ResourceDeclAST>());
-    REQUIRE(pool.lookupView(d.body[0]->as<ResourceDeclAST>()->name) == "State");
-}
-
-TEST_CASE("CompositeDeclAST: with attributes",
-          "[core][ast][decl][composite]")
-{
-    ASTArena arena;
-    StringPool pool;
-
-    auto *exportAttr = arena.make<AttributeAST>(pool.intern("export"));
-    auto attrs = arena.makeSpan<AttributeAST *>({exportAttr});
-
-    CompositeDeclAST d{pool.intern("Health"), {}, {}, {}, attrs};
-
-    REQUIRE(d.attributes.size() == 1);
-    REQUIRE(pool.lookupView(d.attributes[0]->name) == "export");
-}
-
-TEST_CASE("CompositeDeclAST: isa distinguishes it from other declarations",
-          "[core][ast][decl][composite]")
-{
-    CompositeDeclAST d;
-    REQUIRE_FALSE(d.isa<ImportDeclAST>());
-    REQUIRE_FALSE(d.isa<EnumDeclAST>());
-    REQUIRE_FALSE(d.isa<ResourceDeclAST>());
-    REQUIRE_FALSE(d.isa<NodeDeclAST>());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -535,13 +362,11 @@ TEST_CASE("DeclAST: every concrete declaration isa DeclAST",
     EnumDeclAST en;
     ResourceDeclAST res;
     NodeDeclAST node;
-    CompositeDeclAST comp;
 
     REQUIRE(imp.isa<DeclAST>());
     REQUIRE(en.isa<DeclAST>());
     REQUIRE(res.isa<DeclAST>());
     REQUIRE(node.isa<DeclAST>());
-    REQUIRE(comp.isa<DeclAST>());
 }
 
 TEST_CASE("DeclAST: a span of the family base holds different decl kinds",

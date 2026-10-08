@@ -278,7 +278,6 @@ namespace lucid::diag
         //   - An `on` clause's target must be a trigger source.
         //   - An action node must have at least one `on` clause.
         //   - A node port cannot have type Event.
-        //   - A composite Event output's value must resolve to a trigger.
 
         Event_OnTargetNotTrigger = 5301,
         Event_ActionWithoutOn = 5302,

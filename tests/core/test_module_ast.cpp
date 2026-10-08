@@ -90,7 +90,6 @@ TEST_CASE("ModuleAST: a module with one of every top-level declaration kind",
     //     enum Color { Red, Green, Blue }
     //     resource Config { speed: float = 200.0 }
     //     node speed = Float32Node(200.0)
-    //     composite Health { input { max: int } }
     ASTArena arena;
     StringPool pool;
 
@@ -123,36 +122,26 @@ TEST_CASE("ModuleAST: a module with one of every top-level declaration kind",
     auto *nodeExpr = arena.make<NodeExprAST>(nodeType, nodeArgs);
     auto *node = arena.make<NodeDeclAST>(pool.intern("speed"), nodeExpr);
 
-    // composite Health { input { max: int } }
-    auto *intType = arena.make<TypeIdAST>(pool.intern("int"));
-    auto *maxInput = arena.make<CompositeInputAST>(pool.intern("max"), intType);
-    auto inputs = arena.makeSpan<CompositeInputAST *>({maxInput});
-    auto *comp = arena.make<CompositeDeclAST>(CompositeDeclAST{
-        pool.intern("Health"), inputs, {}, {}});
-
     auto decls = arena.makeSpan<DeclAST *>({
         static_cast<DeclAST *>(imp),
         static_cast<DeclAST *>(en),
         static_cast<DeclAST *>(res),
         static_cast<DeclAST *>(node),
-        static_cast<DeclAST *>(comp),
     });
 
     ModuleAST m{pool.intern("test.lucid"), decls};
 
-    REQUIRE(m.declCount() == 5);
+    REQUIRE(m.declCount() == 4);
     REQUIRE(m.decls[0]->isa<ImportDeclAST>());
     REQUIRE(m.decls[1]->isa<EnumDeclAST>());
     REQUIRE(m.decls[2]->isa<ResourceDeclAST>());
     REQUIRE(m.decls[3]->isa<NodeDeclAST>());
-    REQUIRE(m.decls[4]->isa<CompositeDeclAST>());
 
     // Spot-check a leaf field through the base pointer.
     REQUIRE(pool.lookupView(m.decls[0]->as<ImportDeclAST>()->path) == "core.keys");
     REQUIRE(m.decls[1]->as<EnumDeclAST>()->members.size() == 3);
     REQUIRE(m.decls[2]->as<ResourceDeclAST>()->fields.size() == 1);
     REQUIRE(m.decls[3]->as<NodeDeclAST>()->expr->args.size() == 1);
-    REQUIRE(m.decls[4]->as<CompositeDeclAST>()->inputs.size() == 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

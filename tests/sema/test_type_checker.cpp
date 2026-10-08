@@ -292,24 +292,3 @@ TEST_CASE("type checker rejects nil for a non-handle default",
     CHECK(f.diag.hasErrors());
     CHECK(f.diag.all().back().code == DiagCode::Type_InvalidDefault);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Composite input / output types
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST_CASE("type checker accepts a valid composite input",
-          "[sema][type-checker]")
-{
-    Fixture f;
-    auto r = f.run("composite C { input { max: int32 } }\n");
-    CHECK_FALSE(f.diag.hasErrors());
-}
-
-TEST_CASE("type checker rejects Event as a composite input type",
-          "[sema][type-checker]")
-{
-    Fixture f;
-    auto r = f.run("composite C { input { on_hit: Event } }\n");
-    CHECK(f.diag.hasErrors());
-    CHECK(f.diag.all().back().code == DiagCode::Type_UnknownType);
-}

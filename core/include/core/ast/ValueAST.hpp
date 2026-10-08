@@ -10,10 +10,9 @@
 ///             | IDENTIFIER '.' IDENTIFIER
 ///             | node_expr
 ///
-/// A value is what may appear as a node argument, as the right-hand side
-/// of a composite output binding, or as the default of a resource field.
-/// The four forms are exhaustive: there is no operator grammar, no
-/// expression grammar, no parentheses-for-grouping.
+/// A value is what may appear as a node argument, or as the default
+/// of a resource field. The four forms are exhaustive: there is no
+/// operator grammar, no expression grammar, no parentheses-for-grouping.
 ///
 /// ─── The four value nodes ─────────────────────────────────────────────────
 ///   - LiteralValueAST      a literal
@@ -124,7 +123,7 @@ struct LiteralValueAST : BaseAST
 
 /// @brief A bare identifier used as a value.
 ///
-///   `player`       -- a node, resource, or composite input by name
+///   `player`       -- a node, resource
 ///   `max_hp`       -- a resource field by name
 ///
 /// The identifier is a single name; the parser does not resolve it.
@@ -149,7 +148,6 @@ struct IdentifierValueAST : BaseAST
 ///
 ///   `Config.speed`          -- a resource field
 ///   `Key.A`                 -- an enum member
-///   `player_health.current` -- a composite output
 ///
 /// The grammar's `value` production allows exactly one level of field
 /// access: `IDENTIFIER '.' IDENTIFIER`. There is no `a.b.c`. If a future

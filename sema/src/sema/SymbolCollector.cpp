@@ -13,7 +13,7 @@ namespace lucid::sema
         /// Map a declaration kind to a symbol kind. Returns false if the
         /// declaration is not a symbol (e.g., an UnknownAST from a parse
         /// error).
-        bool symbolKindOf(ASTKind kind, SymbolKind& out) noexcept
+        bool symbolKindOf(ASTKind kind, SymbolKind &out) noexcept
         {
             switch (kind)
             {
@@ -29,9 +29,6 @@ namespace lucid::sema
             case ASTKind::NodeDecl:
                 out = SymbolKind::Node;
                 return true;
-            case ASTKind::CompositeDecl:
-                out = SymbolKind::Composite;
-                return true;
             default:
                 return false;
             }
@@ -39,16 +36,16 @@ namespace lucid::sema
 
     } // namespace
 
-    void collectSymbols(const ModuleAST* module,
-                        SymbolTable& table,
-                        lucid::diag::DiagnosticEngine& diag)
+    void collectSymbols(const ModuleAST *module,
+                        SymbolTable &table,
+                        lucid::diag::DiagnosticEngine &diag)
     {
         if (module == nullptr)
         {
             return;
         }
 
-        for (DeclAST* decl : module->decls)
+        for (DeclAST *decl : module->decls)
         {
             if (decl == nullptr)
             {

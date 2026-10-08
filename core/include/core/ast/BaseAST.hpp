@@ -118,7 +118,6 @@ enum class ASTKind : uint16_t
     // ─── Declarations ───────────────────────────────────────────────────
     //
     // Decl is the family base; the eight concrete kinds follow it.
-    // DeclAST's family query covers [Decl, CompositeOutput].
 
     Decl, // family base
     ImportDecl,
@@ -204,7 +203,6 @@ struct ASTKindMatches
     }
 };
 
-/// DeclAST's family covers [Decl, CompositeOutput].
 template <>
 struct ASTKindMatches<DeclAST>
 {

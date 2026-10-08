@@ -10,12 +10,6 @@
 ///     name existing node types, etc.
 ///
 /// Produces a TypeMap.
-///
-/// ─── What Pass 3 does not do ──────────────────────────────────────────────
-/// It does not enforce the Event rules (that is Pass 4), does not
-/// expand composites (Pass 6), does not detect cycles (Pass 7), and
-/// does not build the graph (Pass 9).
-
 #pragma once
 
 #include "core/ast/ModuleAST.hpp"
@@ -39,11 +33,11 @@ namespace lucid::sema
     /// Postconditions:
     ///   - Every expression in the module is recorded in `types`.
     ///   - Diagnostics are reported for type errors.
-    void checkTypes(const ModuleAST* module,
-                    const SymbolTable& symbols,
-                    const ResolutionMap& resolutions,
-                    const Registry& registry,
-                    TypeMap& types,
-                    lucid::diag::DiagnosticEngine& diag);
+    void checkTypes(const ModuleAST *module,
+                    const SymbolTable &symbols,
+                    const ResolutionMap &resolutions,
+                    const Registry &registry,
+                    TypeMap &types,
+                    lucid::diag::DiagnosticEngine &diag);
 
 } // namespace lucid::sema

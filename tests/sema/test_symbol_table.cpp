@@ -12,8 +12,8 @@
 
 using lucid::diag::DiagnosticEngine;
 using lucid::sema::SymbolKind;
-using lucid::sema::SymbolTable;
 using lucid::sema::symbolKindName;
+using lucid::sema::SymbolTable;
 
 namespace
 {
@@ -61,7 +61,7 @@ TEST_CASE("SymbolTable::find returns a stored symbol", "[sema][symbol-table]")
     table.add(f.name("Foo"), SymbolKind::Node, nullptr, f.diag);
     table.add(f.name("Bar"), SymbolKind::Resource, nullptr, f.diag);
 
-    const auto* s = table.find(f.name("Bar"));
+    const auto *s = table.find(f.name("Bar"));
     REQUIRE(s != nullptr);
     CHECK(s->kind == SymbolKind::Resource);
 }
@@ -107,7 +107,7 @@ TEST_CASE("SymbolTable keeps the first declaration on collision",
     table.add(f.name("Foo"), SymbolKind::Node, nullptr, f.diag);
     table.add(f.name("Foo"), SymbolKind::Resource, nullptr, f.diag);
 
-    const auto* s = table.find(f.name("Foo"));
+    const auto *s = table.find(f.name("Foo"));
     REQUIRE(s != nullptr);
     CHECK(s->kind == SymbolKind::Node);
 }
@@ -128,9 +128,8 @@ TEST_CASE("SymbolTable records multiple duplicates",
 
 TEST_CASE("symbolKindName returns stable names", "[sema][symbol-table]")
 {
-    CHECK(std::string_view(symbolKindName(SymbolKind::Import))    == "import");
-    CHECK(std::string_view(symbolKindName(SymbolKind::Enum))      == "enum");
-    CHECK(std::string_view(symbolKindName(SymbolKind::Resource))  == "resource");
-    CHECK(std::string_view(symbolKindName(SymbolKind::Node))      == "node");
-    CHECK(std::string_view(symbolKindName(SymbolKind::Composite)) == "composite");
+    CHECK(std::string_view(symbolKindName(SymbolKind::Import)) == "import");
+    CHECK(std::string_view(symbolKindName(SymbolKind::Enum)) == "enum");
+    CHECK(std::string_view(symbolKindName(SymbolKind::Resource)) == "resource");
+    CHECK(std::string_view(symbolKindName(SymbolKind::Node)) == "node");
 }

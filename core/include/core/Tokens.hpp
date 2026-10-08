@@ -12,11 +12,6 @@
  * matches it by spelling. The parser does the same for any reserved word
  * the grammar might add later.
  *
- * ─── Design: composites are removed ───────────────────────────────────────
- * The grammar's composite feature was removed in Phase 7. The keywords
- * `composite`, `input`, and `output` are no longer recognized. A source
- * that writes them lexes as identifiers.
- *
  * ─── Design: true, false, nil are literals, not keywords ──────────────────
  * The grammar classifies them as literal forms (§1.4: BOOL_LIT, NIL_LIT).
  * The lexer produces a literal token for each, not a keyword token.

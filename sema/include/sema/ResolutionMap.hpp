@@ -9,7 +9,7 @@
 /// place in the AST where a name refers to something else.
 ///
 /// The target is the declaration node that introduces the name. It is
-/// not always a DeclAST: a composite input is a CompositeInputAST, and
+/// not always a DeclAST:
 /// a few other reference kinds resolve to non-DeclAST targets. The
 /// value type is BaseAST* so the map covers every case.
 ///
@@ -62,7 +62,7 @@ namespace lucid::sema
         /// If `ref` was already recorded, the new entry overwrites the
         /// old one. This lets Step 7.8 overwrite deferred entries with
         /// proper resolutions.
-        void record(const BaseAST* ref, const BaseAST* target)
+        void record(const BaseAST *ref, const BaseAST *target)
         {
             m_map[ref] = target;
         }
@@ -75,7 +75,7 @@ namespace lucid::sema
         /// recorded with a null target. The two cases are
         /// indistinguishable at the call site; both mean "no target
         /// available."
-        const BaseAST* lookup(const BaseAST* ref) const noexcept
+        const BaseAST *lookup(const BaseAST *ref) const noexcept
         {
             auto it = m_map.find(ref);
             if (it == m_map.end())
@@ -86,7 +86,7 @@ namespace lucid::sema
         }
 
         /// @brief True if `ref` was recorded, regardless of target.
-        bool contains(const BaseAST* ref) const noexcept
+        bool contains(const BaseAST *ref) const noexcept
         {
             return m_map.find(ref) != m_map.end();
         }
@@ -99,7 +99,7 @@ namespace lucid::sema
         void clear() noexcept { m_map.clear(); }
 
     private:
-        std::unordered_map<const BaseAST*, const BaseAST*> m_map;
+        std::unordered_map<const BaseAST *, const BaseAST *> m_map;
     };
 
 } // namespace lucid::sema

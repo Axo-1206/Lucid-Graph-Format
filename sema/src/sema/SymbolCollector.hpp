@@ -15,13 +15,6 @@
 /// The SymbolCollector is an implementation detail of Pass 1. Only
 /// Sema.cpp calls it. Later passes and tests use the SymbolTable
 /// directly, not the collector.
-///
-/// ─── Module scope only ────────────────────────────────────────────────────
-/// The collector walks only the top-level declarations of the given
-/// module. It does not descend into composites. The grammar does not
-/// allow a composite to declare a top-level symbol; a composite's body
-/// declares only local resources, enums, and nodes that are private to
-/// the composite.
 
 #pragma once
 
@@ -41,8 +34,8 @@ namespace lucid::sema
     ///   - `module` is non-null and was produced by the parser.
     ///   - `table` is empty or contains only entries this function adds.
     ///     The function does not clear the table.
-    void collectSymbols(const ModuleAST* module,
-                        SymbolTable& table,
-                        lucid::diag::DiagnosticEngine& diag);
+    void collectSymbols(const ModuleAST *module,
+                        SymbolTable &table,
+                        lucid::diag::DiagnosticEngine &diag);
 
 } // namespace lucid::sema

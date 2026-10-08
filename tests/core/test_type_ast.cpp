@@ -186,16 +186,6 @@ TEST_CASE("TypeIdAST: the grammar's `core.Key` example",
     REQUIRE(t.isQualified());
 }
 
-TEST_CASE("TypeIdAST: a composite input's type annotation",
-          "[core][ast][type]")
-{
-    // `input { max: int }` produces a TypeIdAST with name = "int".
-    StringPool pool;
-    TypeIdAST t{pool.intern("int")};
-    REQUIRE(pool.lookupView(t.name) == "int");
-    REQUIRE(t.isSimple());
-}
-
 TEST_CASE("TypeIdAST: a resource field's type annotation",
           "[core][ast][type]")
 {

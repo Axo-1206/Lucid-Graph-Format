@@ -130,7 +130,7 @@ TEST_CASE("Lexer: each keyword produces its token type",
     lucid::diag::DiagnosticEngine diag;
 
     auto toks = lex(
-        "import from enum resource node composite on input output",
+        "import from enum resource node on",
         pool, diag);
 
     REQUIRE(typesMatch(toks, {
@@ -139,10 +139,7 @@ TEST_CASE("Lexer: each keyword produces its token type",
                                  TokenType::KW_ENUM,
                                  TokenType::KW_RESOURCE,
                                  TokenType::KW_NODE,
-                                 TokenType::KW_COMPOSITE,
                                  TokenType::KW_ON,
-                                 TokenType::KW_INPUT,
-                                 TokenType::KW_OUTPUT,
                              }));
     REQUIRE(diag.empty());
 }
@@ -221,12 +218,11 @@ TEST_CASE("Lexer: keywords cannot be used as identifiers",
     StringPool pool;
     lucid::diag::DiagnosticEngine diag;
 
-    auto toks = lex("import resource composite", pool, diag);
+    auto toks = lex("import resource", pool, diag);
 
     REQUIRE(typesMatch(toks, {
                                  TokenType::KW_IMPORT,
                                  TokenType::KW_RESOURCE,
-                                 TokenType::KW_COMPOSITE,
                              }));
 }
 
@@ -1037,58 +1033,6 @@ TEST_CASE("Lexer: a node declaration with an `on` clause lexes as expected",
                                  TokenType::IDENTIFIER, // on_hit
                                  TokenType::COMMA,
                                  TokenType::IDENTIFIER, // on_other
-                             }));
-    REQUIRE(diag.empty());
-}
-
-TEST_CASE("Lexer: a composite with input and output blocks lexes as expected",
-          "[parser][lexer][integration]")
-{
-    StringPool pool;
-    lucid::diag::DiagnosticEngine diag;
-
-    auto toks = lex(
-        "composite Health {\n"
-        "    input  { max: int }\n"
-        "    output { current: int = State.current }\n"
-        "    resource State { current: int = 0 }\n"
-        "}\n",
-        pool, diag);
-
-    REQUIRE(typesMatch(toks, {
-                                 TokenType::KW_COMPOSITE,
-                                 TokenType::IDENTIFIER, // Health
-                                 TokenType::LBRACE,
-
-                                 TokenType::KW_INPUT,
-                                 TokenType::LBRACE,
-                                 TokenType::IDENTIFIER, // max
-                                 TokenType::COLON,
-                                 TokenType::IDENTIFIER, // int
-                                 TokenType::RBRACE,
-
-                                 TokenType::KW_OUTPUT,
-                                 TokenType::LBRACE,
-                                 TokenType::IDENTIFIER, // current
-                                 TokenType::COLON,
-                                 TokenType::IDENTIFIER, // int
-                                 TokenType::EQUALS,
-                                 TokenType::IDENTIFIER, // State
-                                 TokenType::DOT,
-                                 TokenType::IDENTIFIER, // current
-                                 TokenType::RBRACE,
-
-                                 TokenType::KW_RESOURCE,
-                                 TokenType::IDENTIFIER, // State
-                                 TokenType::LBRACE,
-                                 TokenType::IDENTIFIER, // current
-                                 TokenType::COLON,
-                                 TokenType::IDENTIFIER, // int
-                                 TokenType::EQUALS,
-                                 TokenType::INT_LITERAL, // 0
-                                 TokenType::RBRACE,
-
-                                 TokenType::RBRACE,
                              }));
     REQUIRE(diag.empty());
 }

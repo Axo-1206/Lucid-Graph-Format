@@ -82,7 +82,7 @@ namespace lucid::sema
         ASTArena arena;
         DiagnosticEngine diag(&pool);
 
-        TokenStream dummyStream(std::vector<Token>{
+        parser::TokenStream dummyStream(std::vector<Token>{
             Token{TokenType::EOF_TOKEN, InternedString{}, SourceLocation{1, 1}}});
         parser::ParserContext ctx(pool, arena, diag, dummyStream);
         ModuleAST *module = parser::parseFile(filename, source, ctx);
