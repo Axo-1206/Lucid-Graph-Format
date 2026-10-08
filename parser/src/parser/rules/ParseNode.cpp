@@ -6,7 +6,7 @@
 /// The grammar's §2.6 writes:
 ///
 ///     node_expr    ::= NodeType '(' [ arg_list ] ')'
-///     NodeType     ::= IDENTIFIER [ '.' IDENTIFIER ]
+///     NodeType     ::= [ IDENTIFIER '::' ] IDENTIFIER
 ///     arg_list     ::= arg { ',' arg } [ ',' ]
 ///     trigger_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
 ///
@@ -14,6 +14,11 @@
 /// parseNodeExpr parses the NodeType with parseTypeId, then expects `(`,
 /// then calls parseArgList (which consumes the closing `)`), then builds
 /// a NodeExprAST.
+///
+/// The NodeType is parsed by parseTypeId, so a qualified node type
+/// (`physics::Body`) and an unqualified one (`Float32Node`) go through
+/// the same path. parseTypeId handles the `::` qualifier; this function
+/// does not see the separator.
 ///
 /// Error behavior:
 ///   - Missing node type → parseTypeId returns a marked TypeIdAST; the
@@ -65,6 +70,9 @@ namespace lucid::parser
         const SourceLocation startLoc = stream.currentLoc();
 
         // ─── The node type ─────────────────────────────────────────────────
+        // parseTypeId handles the optional `::` qualifier. An unqualified
+        // type (`Float32Node`) and a qualified type (`physics::Body`) both
+        // arrive here as a single TypeIdAST.
         TypeIdAST *type = parseTypeId(stream, ctx);
 
         // ─── The argument list ─────────────────────────────────────────────

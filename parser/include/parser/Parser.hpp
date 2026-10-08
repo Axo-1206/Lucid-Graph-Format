@@ -25,8 +25,9 @@
  *
  * ─── Design: attributes are the dispatcher's job ──────────────────────────
  * A declaration is optionally preceded by a sequence of juxtaposed
- * attributes (`@name`). `parseDecl` reads the attribute sequence before
- * dispatching to the specific declaration parser.
+ * attributes (`@name`). The grammar allows an attribute list on any of
+ * the four top-level declarations. `parseDecl` reads the attribute
+ * sequence before dispatching to the specific declaration parser.
  *
  * ─── Design: every parse function has external linkage ────────────────────
  * Every function the parser defines is declared here and defined with
@@ -97,6 +98,17 @@ namespace lucid::parser
     /// location of the first attribute, or of the declaration keyword if
     /// there were none.
     ///
+    /// The grammar allows an attribute list on any of the four top-level
+    /// declarations:
+    ///
+    ///     import_decl   ::= attribute_list 'import'   ...
+    ///     enum_decl     ::= attribute_list 'enum'     ...
+    ///     resource_decl ::= attribute_list 'resource' ...
+    ///     node_decl     ::= attribute_list 'node'     ...
+    ///
+    /// The parser does not check which attribute names are recognized or
+    /// which declarations they may appear on. Sema does both.
+    ///
     /// Error behavior: if the attribute sequence is followed by a token that
     /// is not a declaration keyword, reports "expected a declaration after
     /// the attribute(s)" and returns a marked UnknownAST (as a DeclAST is not
@@ -114,17 +126,21 @@ namespace lucid::parser
     // Each is called with the cursor on its keyword; attributes have already
     // been read by parseDecl.
 
-    /// @brief Parse `import module_path [ as IDENTIFIER ]`.
+    /// @brief Parse `import module_path`.
     ///
-    /// Resolves nothing. The alias is the alias the source wrote, or the last
-    /// path segment if none was written. The path is the dotted form as a
-    /// single InternedString ("a.b.c"). The CLI's import-linking step does
-    /// the resolution.
+    /// Resolves nothing. The module name is the final path segment, and is
+    /// stored in the declaration's `name` field. The path is the dotted
+    /// form as a single InternedString ("a.b.c"). The CLI's import-linking
+    /// step does the resolution.
+    ///
+    /// There is no `as` clause and no alias. The grammar binds the module's
+    /// exported declarations bare, and binds the module name (the final
+    /// path segment) for use as a `::` qualifier in type positions.
     ///
     /// Error behavior: if the module path is missing, reports a diagnostic
-    /// and returns nullptr. If the alias after `as` is missing, reports a
-    /// diagnostic and uses the last path segment as the alias, returning a
-    /// marked node.
+    /// and returns nullptr. If a segment after a `.` is missing, reports a
+    /// diagnostic and returns a marked node with the path read so far and
+    /// the last valid segment as the module name.
     ImportDeclAST *parseImportDecl(TokenStream &stream, ParserContext &ctx);
 
     /// @brief Parse `enum NAME { members }`.
@@ -146,9 +162,20 @@ namespace lucid::parser
     /// is malformed, returns a marked node with whatever fields were read.
     ResourceDeclAST *parseResourceDecl(TokenStream &stream, ParserContext &ctx);
 
-    /// @brief Parse one resource field: `name: type [ = literal ]`.
+    /// @brief Parse one resource field: `name: type [ = value ]`.
     ///
-    /// The default is a literal, per the grammar. It is not a general value.
+    /// The default is a `value` (grammar §2.7), not only a literal. All four
+    /// value forms are accepted:
+    ///
+    ///   - a literal: `10`, `-7`, `"hello"`, `200.0`
+    ///   - an identifier: `some_resource`
+    ///   - a field access: `Key.A`, `Config.speed`
+    ///   - an inline node: `Float32Node(1.0)`
+    ///
+    /// The grammar allows any value; Sema enforces that the default is
+    /// meaningful for the field's type. A default of `Key.A` requires the
+    /// field's type to be an enum or a compatible type; the parser does not
+    /// check this.
     ///
     /// Error behavior: partial-parse. If the type is missing, the returned
     /// field has a null type and is marked. If the default is missing after
@@ -170,13 +197,17 @@ namespace lucid::parser
     // 5. Type parser
     // =============================================================================
 
-    /// @brief Parse a `type_id`: `IDENTIFIER [ '.' IDENTIFIER ]`.
+    /// @brief Parse a `type_id`: `IDENTIFIER [ '::' IDENTIFIER ]`.
     ///
     /// The name and qualifier are interned. The parser does not resolve the
-    /// name against the registry.
+    /// name against the registry. A qualified type is written with `::`
+    /// (`core::Key`); the single `:` is the resource-field separator and
+    /// does not appear inside a `type_id`.
     ///
     /// Error behavior: partial-parse. If the identifier is missing, returns
-    /// a marked TypeIdAST with an invalid name. Never returns nullptr.
+    /// a marked TypeIdAST with an invalid name. If the identifier after `::`
+    /// is missing, returns a marked TypeIdAST with the qualifier set and an
+    /// invalid name. Never returns nullptr.
     TypeIdAST *parseTypeId(TokenStream &stream, ParserContext &ctx);
 
     // =============================================================================
@@ -191,6 +222,10 @@ namespace lucid::parser
     ///   - IDENTIFIER followed by `(` → InlineNodeValueAST
     ///   - IDENTIFIER alone → IdentifierValueAST
     ///
+    /// A signed literal (`-7`, `+3.14`) is a single literal token; the sign
+    /// is part of the token's text, not a separate token. There is no
+    /// unary-minus production.
+    ///
     /// Error behavior: partial-parse. If the current token cannot begin a
     /// value, reports a diagnostic and returns a marked UnknownAST. Never
     /// returns nullptr; the caller can rely on a non-null pointer.
@@ -200,7 +235,8 @@ namespace lucid::parser
     ///
     /// The token's kind (INT_LITERAL, FLOAT_LITERAL, ...) is mapped to a
     /// LiteralKind. The token's payload (already unescaped for strings and
-    /// chars) is stored as the literal's text.
+    /// chars, and including any leading sign for numbers) is stored as the
+    /// literal's text.
     ///
     /// Error behavior: partial-parse. If the current token is not a literal,
     /// reports a diagnostic and returns a marked literal with kind Int and
@@ -214,7 +250,7 @@ namespace lucid::parser
     /// @brief Parse a node expression: `NodeType '(' [ arg_list ] ')'`.
     ///
     /// The NodeType is a TypeIdAST (same shape as `type_id`). The arguments
-    /// are a span of values.
+    /// are a span of values. A qualified node type uses `::` (`physics::Body`).
     ///
     /// Error behavior: partial-parse. If the node type is missing, the
     /// returned node has a null type. If the argument list is malformed, the
@@ -248,7 +284,8 @@ namespace lucid::parser
     //
     // Attributes are juxtaposed: a declaration may be preceded by any number
     // of `@name` prefixes, with no separator between them and no brackets
-    // around the list.
+    // around the list. The grammar allows an attribute list on any of the
+    // four top-level declarations.
 
     /// @brief Parse a sequence of `@name` attributes.
     ///
@@ -279,6 +316,10 @@ namespace lucid::parser
     ///
     /// Returns the path as a single InternedString with the segments joined
     /// by '.'. The caller has consumed `import`.
+    ///
+    /// The `.` here is a module-path separator, not field access and not the
+    /// `::` qualifier. A module path is always dotted; the module name (the
+    /// final segment) is used later as a `::` qualifier.
     ///
     /// Error behavior: partial-parse. If the first segment is missing,
     /// reports a diagnostic and returns an invalid InternedString. If a

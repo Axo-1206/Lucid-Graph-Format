@@ -3,7 +3,7 @@
 /// @brief Implementation of parseValue and parseLiteral.
 ///
 /// ─── The production ───────────────────────────────────────────────────────
-/// The grammar's §2.8 writes:
+/// The grammar's §2.7 writes:
 ///
 ///     value ::= literal
 ///             | IDENTIFIER
@@ -22,9 +22,9 @@
 ///     InlineNodeValueAST wrapping a NodeExprAST. The check happens
 ///     before consuming the identifier, so parseNodeExpr sees it.
 ///
-///   - An IDENTIFIER whose next token is `.` and whose token after that
+///   - An IDENTIFIER whose next token is `::` and whose token after that
 ///     is an IDENTIFIER followed by `(` → a qualified inline node:
-///     `Module.Type(...)` → InlineNodeValueAST wrapping a NodeExprAST.
+///     `Module::Type(...)` → InlineNodeValueAST wrapping a NodeExprAST.
 ///
 ///   - An IDENTIFIER whose next token is `.` → FieldAccessValueAST.
 ///
@@ -32,13 +32,22 @@
 ///
 ///   - Anything else → a marked UnknownAST, nothing consumed.
 ///
-/// ─── The inline-node two-token peek ───────────────────────────────────────
-/// The "identifier followed by `(`" case is the only one that requires
-/// looking at two tokens. The parser does this rather than consuming the
-/// identifier and rewinding, because the rewind is uglier for the same
-/// result. This is a bounded lookahead of two tokens, not backtracking;
-/// the grammar remains LL(1) in the sense that no parse decision depends
-/// on more than one token of *dispatch* input at each decision point.
+/// ─── Dot vs. double-colon ─────────────────────────────────────────────────
+/// A dot (`.`) is field access: `Object.Field`. A double-colon (`::`) is
+/// module qualification: `Module::Type`. They never mix in one name. A
+/// qualified inline node is `Module::Type(...)`, not `Module.Type(...)`.
+/// The latter parses as a field access `Module.Type` followed by a `(`,
+/// which is a syntax error at the call site.
+///
+/// ─── The inline-node lookahead ────────────────────────────────────────────
+/// The "identifier followed by `(`" case needs one token of lookahead.
+/// The qualified case (`Module::Type(...)`) needs four: the current
+/// identifier, the `::`, the second identifier, and the `(`. The parser
+/// does this with peekAt rather than consuming and rewinding, because the
+/// rewind is uglier for the same result. This is bounded lookahead, not
+/// backtracking; the grammar remains LL(1) in the sense that no parse
+/// decision depends on more than one token of *dispatch* input at each
+/// decision point.
 
 #include "parser/Parser.hpp"
 
@@ -82,14 +91,8 @@ namespace lucid::parser
                 return node;
             }
 
-            // Qualified inline node: `Module.Type(...)`.
-            //
-            // The shape is `IDENTIFIER DOT IDENTIFIER LPAREN ...`. A plain
-            // field access is `IDENTIFIER DOT IDENTIFIER` with anything else
-            // after. Distinguish them with two more tokens of lookahead:
-            // `peekAt(2)` is the identifier after the dot, `peekAt(3)` is
-            // the token after that.
-            if (follower == TokenType::DOT &&
+            // Qualified inline node: `Module::Type(...)`.
+            if (follower == TokenType::COLON_COLON &&
                 stream.peekAt(2).type == TokenType::IDENTIFIER &&
                 stream.peekAt(3).type == TokenType::LPAREN)
             {
@@ -101,6 +104,26 @@ namespace lucid::parser
                 {
                     node->hasSyntaxError = true;
                 }
+                return node;
+            }
+
+            // A `::` that does not complete a qualified node expression.
+            if (follower == TokenType::COLON_COLON)
+            {
+                const SourceLocation startLoc = stream.currentLoc();
+                const InternedString name = stream.peekValue();
+                stream.consume(); // the identifier
+
+                ctx.diag.errorAt(DiagCode::Syntax_UnexpectedToken,
+                                 stream.currentLoc(),
+                                 "a '::' qualifier is only valid in a node "
+                                 "expression such as Module::Type(...)");
+                stream.consume(); // the '::'
+
+                IdentifierValueAST *node =
+                    ctx.arena.make<IdentifierValueAST>(name);
+                node->loc = startLoc;
+                node->hasSyntaxError = true;
                 return node;
             }
 
@@ -152,39 +175,7 @@ namespace lucid::parser
                          "node expression)");
 
         UnknownAST *node = ctx.arena.make<UnknownAST>();
-        // UnknownAST's constructor sets hasSyntaxError = true.
         node->loc = stream.currentLoc();
-        return node;
-    }
-
-    // =============================================================================
-    // parseLiteral
-    // =============================================================================
-
-    LiteralValueAST *parseLiteral(TokenStream &stream, ParserContext &ctx)
-    {
-        const TokenType current = stream.peekType();
-
-        if (!isLiteral(current))
-        {
-            ctx.diag.errorAt(DiagCode::Syntax_ExpectedLiteral,
-                             stream.currentLoc(),
-                             "expected a literal");
-
-            LiteralValueAST *node = ctx.arena.make<LiteralValueAST>();
-            node->loc = stream.currentLoc();
-            node->hasSyntaxError = true;
-            return node;
-        }
-
-        const SourceLocation startLoc = stream.currentLoc();
-        const InternedString text = stream.peekValue();
-        const LiteralKind kind = literalKindOf(current);
-        stream.consume();
-
-        LiteralValueAST *node =
-            ctx.arena.make<LiteralValueAST>(kind, text);
-        node->loc = startLoc;
         return node;
     }
 

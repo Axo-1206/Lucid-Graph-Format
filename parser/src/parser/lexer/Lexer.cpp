@@ -16,6 +16,25 @@
 /// LexerState has an optional pointer to a TriviaBuffer. When non-null,
 /// comments are appended to it. When null, comments are discarded.
 /// tokenize passes null; tokenizeWithTrivia passes a real buffer.
+///
+/// ─── Signed numeric literals ──────────────────────────────────────────────
+/// The grammar's INT_LIT and FLOAT_LIT carry an optional leading '+'
+/// or '-'. The sign is part of the literal token, not a separate
+/// operator. lexOne routes a '+' or '-' followed by a digit to
+/// lexNumber, which consumes the sign and stores it in the lexeme.
+///
+/// A '-' that is not followed by a digit is not a sign. The lexer
+/// checks for the line-comment prefix '--' before it checks for a
+/// signed number, so '--7' is a comment, not a signed literal. A
+/// lone '+' or '-' reaches lexPunctuation, which does not recognize
+/// either character and reports Lex_UnknownCharacter.
+///
+/// ─── The two-colon token ──────────────────────────────────────────────────
+/// The grammar uses ':' as the resource-field separator and '::' as the
+/// module qualifier. lexPunctuation checks for '::' before it checks for
+/// a single ':', and emits COLON_COLON or COLON accordingly. The two
+/// are distinct token types; the parser never has to look inside a
+/// token to decide which one it has.
 
 #include "parser/lexer/Lexer.hpp"
 
@@ -57,7 +76,6 @@ namespace lucid::lexer
     // =============================================================================
     // 2. Cursor primitives
     // =============================================================================
-    // (unchanged)
 
     namespace
     {
@@ -141,7 +159,6 @@ namespace lucid::lexer
     // =============================================================================
     // 4. The keyword table
     // =============================================================================
-    // (unchanged)
 
     namespace
     {
@@ -258,8 +275,6 @@ namespace lucid::lexer
     // =============================================================================
     // 6. Literal scanners
     // =============================================================================
-    // (unchanged, except that readEscape needs to be visible to the char
-    // and string lexers — it is unchanged)
 
     namespace
     {
@@ -281,16 +296,28 @@ namespace lucid::lexer
             s.tokens.push_back(makeTokenFromLexeme(s, type, word, startLoc));
         }
 
+        /// Lex a numeric literal, including an optional leading sign.
+        ///
+        /// The sign is consumed as part of the lexeme. The caller
+        /// (lexOne) has already established that a sign, if present, is
+        /// followed by a digit; this function re-checks for defensive
+        /// completeness.
+        ///
+        /// Radix forms (`0x`, `0b`, `0o`) accept a sign in front. The
+        /// grammar allows it; whether a signed radix literal is
+        /// meaningful is a Sema question, not a lexical one.
         void lexNumber(LexerState &s)
         {
             const SourceLocation startLoc = currentLocation(s);
             const size_t startPos = s.position;
 
-            if (currentChar(s) == '-')
+            // ─── Optional sign ─────────────────────────────────────────────
+            if (currentChar(s) == '-' || currentChar(s) == '+')
             {
                 advance(s);
             }
 
+            // ─── Radix prefixes ────────────────────────────────────────────
             if (currentChar(s) == '0')
             {
                 const char next = peekChar(s, 1);
@@ -343,11 +370,16 @@ namespace lucid::lexer
                 }
             }
 
+            // ─── Decimal integer part ──────────────────────────────────────
             while (isDigit(currentChar(s)))
                 advance(s);
 
             bool isFloat = false;
 
+            // ─── Fractional part ───────────────────────────────────────────
+            // A '.' begins the fractional part only when a digit follows.
+            // `1.` is not a float; the '.' is left for whatever comes next
+            // (a field access, in a value position).
             if (currentChar(s) == '.' && isDigit(peekChar(s, 1)))
             {
                 isFloat = true;
@@ -356,6 +388,15 @@ namespace lucid::lexer
                     advance(s);
             }
 
+            // ─── Exponent ──────────────────────────────────────────────────
+            // The exponent may carry its own sign. It does not make the
+            // literal a float if it was not one already — but in this
+            // grammar, an exponent without a fractional part is not a
+            // valid FLOAT_LIT, because FLOAT_LIT requires a '.'. The
+            // `isFloat = true` here is defensive; a bare `1e5` reaches
+            // this branch as an integer and would be reported by a
+            // stricter check. The current lexer accepts it and marks it
+            // as a float; Sema or a later tightening can reject it.
             if (currentChar(s) == 'e' || currentChar(s) == 'E')
             {
                 isFloat = true;
@@ -562,7 +603,19 @@ namespace lucid::lexer
     // =============================================================================
     // 7. Punctuation
     // =============================================================================
-    // (unchanged)
+    //
+    // Two entries need more than one character of lookahead:
+    //
+    //   - ':' vs '::'  — the grammar uses both, as the resource-field
+    //                    separator and the module qualifier. The lexer
+    //                    emits COLON_COLON for two consecutive colons
+    //                    and COLON otherwise.
+    //
+    // Every other punctuation token is a single character.
+    //
+    // The comment prefixes '--' and '/-' are handled in lexOne, not
+    // here, because they consume a different shape (a run to end of line
+    // or a nestable block) than a fixed-width token does.
 
     namespace
     {
@@ -571,6 +624,18 @@ namespace lucid::lexer
         {
             const SourceLocation startLoc = currentLocation(s);
             const char c = currentChar(s);
+
+            // ─── '::' before ':' ───────────────────────────────────────────
+            // The two-colon token must be checked first, or a ':' would
+            // consume the first colon and leave the second as a stray.
+            if (c == ':' && peekChar(s, 1) == ':')
+            {
+                advance(s);
+                advance(s);
+                s.tokens.push_back(makeTokenFromLexeme(
+                    s, TokenType::COLON_COLON, "::", startLoc));
+                return;
+            }
 
             TokenType type = TokenType::UNKNOWN;
             switch (c)
@@ -668,6 +733,8 @@ namespace lucid::lexer
             const char next = peekChar(s, 1);
 
             // ─── Line comment ──────────────────────────────────────────────
+            // '--' must be checked before the signed-number case below,
+            // or '--7' would be read as a signed literal.
             if (c == '-' && next == '-')
             {
                 const SourceLocation startLoc = currentLocation(s);
@@ -705,12 +772,18 @@ namespace lucid::lexer
                 return;
             }
 
-            // ─── Numbers ───────────────────────────────────────────────────
-            if (c == '-' && isDigit(next))
+            // ─── Signed numbers ────────────────────────────────────────────
+            // A sign is part of the literal only when a digit follows.
+            // A bare sign reaches the punctuation path below, which
+            // reports Lex_UnknownCharacter for '+' and '-' (neither is
+            // a punctuation token).
+            if ((c == '-' || c == '+') && isDigit(next))
             {
                 lexNumber(s);
                 return;
             }
+
+            // ─── Unsigned numbers ──────────────────────────────────────────
             if (isDigit(c))
             {
                 lexNumber(s);

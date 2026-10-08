@@ -20,8 +20,8 @@
 /// Every predicate takes a `TokenType` and nothing else. No previous
 /// token, no brace depth, no parser state.
 ///
-/// ─── The four predicates ──────────────────────────────────────────────────
-/// Four productions currently need a start-set test:
+/// ─── The three predicates ─────────────────────────────────────────────────
+/// Three productions need a start-set test:
 ///
 ///   - `top_decl`                 → canStartTopDecl
 ///   - `value`                    → canStartValue
@@ -47,12 +47,12 @@ namespace lucid::parser
     ///                | resource_decl
     ///                | node_decl
     ///
-    /// and each of `resource_decl` and `node_decl` may be preceded by an
+    /// and each of the four declarations may be preceded by an
     /// `attribute_list`, whose first token is `@`.
     ///
     /// The start set is therefore:
     ///
-    ///   @            an attribute_list (before a resource or node)
+    ///   @            an attribute_list (before any of the four)
     ///   import       import_decl
     ///   enum         enum_decl
     ///   resource     resource_decl
@@ -97,6 +97,12 @@ namespace lucid::parser
     /// The fourth form (`node_expr`) also begins with an identifier — the
     /// node type name — and is distinguished from the bare-identifier and
     /// field-access forms by what follows.
+    ///
+    /// A signed literal (`-7`, `+3.14`) is a single literal token; the
+    /// `-` or `+` is part of the literal and does not appear here as a
+    /// separate token type. A value never begins with `-` or `+` as a
+    /// token; it begins with a literal token whose text happens to carry
+    /// a sign.
     inline bool canStartValue(TokenType t) noexcept
     {
         if (t == TokenType::IDENTIFIER)
@@ -114,9 +120,16 @@ namespace lucid::parser
     ///
     /// The grammar's `type_id` is:
     ///
-    ///     type_id ::= IDENTIFIER [ '.' IDENTIFIER ]
+    ///     type_id ::= [ IDENTIFIER '::' ] IDENTIFIER
     ///
-    /// The start set is exactly `IDENTIFIER`.
+    /// The start set is exactly `IDENTIFIER`. The optional qualifier is
+    /// read by the caller (`parseTypeId`), which then checks for `::` and
+    /// a second identifier. This predicate answers only "can the type
+    /// reference start here?", and it can only start with an identifier.
+    ///
+    /// The `::` separator is a distinct token from `:`; it does not appear
+    /// in the start set, and it does not appear in a `type_id` in the
+    /// resource-field separator position.
     inline bool canStartType(TokenType t) noexcept
     {
         return t == TokenType::IDENTIFIER;

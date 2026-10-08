@@ -22,12 +22,11 @@
 /// ─── One recovery context ─────────────────────────────────────────────────
 /// The Lucid Graph Format has one declaration list: the top level
 /// (`program ::= { top_decl }`). The parser's recovery scan is used in
-/// the top-level loop when a declaration fails to parse. There is no
-/// second recovery context;
+/// the top-level loop when a declaration fails to parse.
 ///
 /// There are no statements, no function bodies, no block-local
-/// declarations, and no other nested construct that needs its own recovery
-/// scan. The context above are the entire set.
+/// declarations, and no other nested construct that needs its own
+/// recovery scan. The top level is the only recovery context.
 ///
 /// ─── Design: two scans, one primitive ─────────────────────────────────────
 /// `synchronizeUntil` is the depth-blind scan: its predicate is
@@ -36,8 +35,8 @@
 /// `synchronizeUntilDepth` is the depth-aware scan: its predicate is
 /// `bool(TokenStream&, int)` and is consulted at every token. Use it when
 /// the recovery decision depends on whether the scan is inside a lost
-/// block, or when the predicate needs to look ahead (`FN` followed by an
-/// identifier is a strong declaration start; a bare `FN` is not).
+/// block, or when the predicate needs to look ahead (`KW_NODE` followed by
+/// an identifier is a strong declaration start; a bare `KW_NODE` is not).
 ///
 /// `synchronizeTo` is a variadic convenience over `synchronizeUntil`.
 ///

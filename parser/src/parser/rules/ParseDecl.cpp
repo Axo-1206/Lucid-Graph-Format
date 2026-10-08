@@ -6,17 +6,18 @@
 /// ─── The productions ──────────────────────────────────────────────────────
 /// The grammar writes:
 ///
-///     import_decl ::= 'import' module_path [ 'as' IDENTIFIER ]
+///     import_decl ::= attribute_list 'import' module_path
 ///     module_path ::= IDENTIFIER { '.' IDENTIFIER }
 ///
-///     enum_decl ::= 'enum' IDENTIFIER '{' enum_member_list '}'
+///     enum_decl ::= attribute_list 'enum' IDENTIFIER
+///                       '{' enum_member_list '}'
 ///     enum_member_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
 ///
 ///     resource_decl  ::= attribute_list 'resource' IDENTIFIER
 ///                            '{' { resource_field } '}'
-///     resource_field ::= IDENTIFIER ':' type_id [ '=' literal ]
+///     resource_field ::= IDENTIFIER ':' type_id [ '=' value ]
 ///
-///     node_decl ::= 'node' IDENTIFIER '=' node_expr
+///     node_decl ::= attribute_list 'node' IDENTIFIER '=' node_expr
 ///                       [ 'on' trigger_list ]
 ///
 ///     attribute_list ::= { '@' IDENTIFIER }
@@ -25,11 +26,17 @@
 /// `parseDecl` in Parser.cpp reads the attribute list before dispatching.
 /// The specific declaration parsers below never see an `@`.
 ///
+/// ─── The import model ─────────────────────────────────────────────────────
+/// There is no `as` clause and no alias. An import binds the module's
+/// exported declarations bare, and binds the module name (the final path
+/// segment) for use as a `::` qualifier in type positions. The parser
+/// stores both: the full dotted `path` and the final-segment `name`.
+///
 /// ─── The shared dispatcher ────────────────────────────────────────────────
 /// `parseDeclByKeyword` is the "which parser for which keyword" switch.
-/// It is shared between the top-level dispatch.
-/// It is declared in ParseDeclInternal.hpp, not Parser.hpp,
-/// because it is not part of the parser's public API.
+/// It is shared between the top-level dispatch. It is declared in
+/// ParseDeclInternal.hpp, not Parser.hpp, because it is not part of the
+/// parser's public API.
 
 #include "parser/Parser.hpp"
 #include "parser/rules/ParseDeclInternal.hpp"
@@ -40,6 +47,37 @@ using namespace lucid::diag;
 
 namespace lucid::parser
 {
+
+    // =============================================================================
+    // Local helpers
+    // =============================================================================
+
+    namespace
+    {
+
+        /// The final segment of a dotted module path.
+        ///
+        /// `core.keys`     -> `keys`
+        /// `health`        -> `health`
+        /// `a.b.c`         -> `c`
+        /// ``              -> ``
+        ///
+        /// The parser uses this to derive an import's module name from its
+        /// path. The grammar has no `as` clause, so the module name is
+        /// always the final segment.
+        InternedString finalPathSegment(StringPool &pool,
+                                        InternedString path)
+        {
+            const std::string_view full = pool.lookupView(path);
+            const size_t lastDot = full.rfind('.');
+            const std::string_view segment =
+                lastDot == std::string_view::npos
+                    ? full
+                    : full.substr(lastDot + 1);
+            return pool.intern(segment);
+        }
+
+    } // namespace
 
     // =============================================================================
     // parseDeclByKeyword — the shared dispatcher
@@ -58,10 +96,9 @@ namespace lucid::parser
         case TokenType::KW_NODE:
             return parseNodeDecl(stream, ctx);
         default:
-            // The caller has already checked canStartTopDecl
-            // parseEnumMemberList here is a caller bug,
-            // not a user error. Report internally and return nullptr so
-            // the caller's loop can recover.
+            // The caller has already checked canStartTopDecl. Reaching
+            // here is a caller bug, not a user error. Report internally
+            // and return nullptr so the caller's loop can recover.
             ctx.diag.errorAt(DiagCode::Internal_Assertion,
                              stream.currentLoc(),
                              "parseDeclByKeyword: caller passed a token "
@@ -88,42 +125,14 @@ namespace lucid::parser
             return nullptr;
         }
 
-        // ─── The optional alias ────────────────────────────────────────────
-        // `as` is matched by spelling, not by keyword. The lexer produces
-        // IDENTIFIER for it, per Tokens.hpp's design note.
-        InternedString alias{};
-        if (stream.check(TokenType::IDENTIFIER) &&
-            stream.peekValueView(ctx.pool) == std::string_view{"as"})
-        {
-            stream.consume(); // `as`
+        // ─── The module name: the final path segment ───────────────────────
+        // There is no `as` clause. The module name is always the final
+        // segment of the path; the parser computes it here so the AST
+        // carries both the full path and the module name.
+        const InternedString moduleName = finalPathSegment(ctx.pool, path);
 
-            if (!stream.check(TokenType::IDENTIFIER))
-            {
-                ctx.diag.errorAt(DiagCode::Syntax_ExpectedImportAlias,
-                                 stream.currentLoc(),
-                                 "expected an identifier after 'as'");
-                // Fall through: use the last path segment as the alias.
-            }
-            else
-            {
-                alias = stream.peekValue();
-                stream.consume();
-            }
-        }
-
-        // ─── Default alias: the last path segment ──────────────────────────
-        if (!alias.isValid())
-        {
-            const std::string_view fullPath = ctx.pool.lookupView(path);
-            const size_t lastDot = fullPath.rfind('.');
-            const std::string_view lastSegment =
-                lastDot == std::string_view::npos
-                    ? fullPath
-                    : fullPath.substr(lastDot + 1);
-            alias = ctx.pool.intern(lastSegment);
-        }
-
-        ImportDeclAST *node = ctx.arena.make<ImportDeclAST>(path, alias);
+        ImportDeclAST *node =
+            ctx.arena.make<ImportDeclAST>(path, moduleName);
         node->loc = startLoc;
         return node;
     }
@@ -388,29 +397,31 @@ namespace lucid::parser
         TypeIdAST *type = parseTypeId(stream, ctx);
 
         // ─── The optional default ──────────────────────────────────────────
-        LiteralValueAST *defaultValue = nullptr;
+        // The default is a value (§2.7), not only a literal. The parser
+        // accepts any of the four value forms:
+        //
+        //   - a literal:       `10`, `-7`, `"hello"`, `200.0`
+        //   - an identifier:   `some_resource`
+        //   - a field access:  `Key.A`, `Config.speed`
+        //   - an inline node:  `Float32Node(1.0)`
+        //
+        // Sema enforces that the default is meaningful for the field's
+        // type. The parser does not know the field's type; it accepts the
+        // value and lets Sema report a mismatch.
+        BaseAST *defaultValue = nullptr;
         if (stream.match(TokenType::EQUALS))
         {
-            if (!isLiteral(stream.peekType()))
-            {
-                ctx.diag.errorAt(DiagCode::Syntax_ExpectedFieldDefault,
-                                 stream.currentLoc(),
-                                 "expected a literal after '='");
-                // Fall through: field has no default; the error is
-                // reported and the node is marked.
-                ResourceFieldAST *node =
-                    ctx.arena.make<ResourceFieldAST>(name, type, nullptr);
-                node->loc = startLoc;
-                node->hasSyntaxError = true;
-                return node;
-            }
-            defaultValue = parseLiteral(stream, ctx);
+            defaultValue = parseValue(stream, ctx);
         }
 
         ResourceFieldAST *node =
             ctx.arena.make<ResourceFieldAST>(name, type, defaultValue);
         node->loc = startLoc;
         if (type && type->hasSyntaxError)
+        {
+            node->hasSyntaxError = true;
+        }
+        if (defaultValue && defaultValue->hasSyntaxError)
         {
             node->hasSyntaxError = true;
         }

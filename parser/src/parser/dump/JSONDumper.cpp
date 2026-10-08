@@ -193,7 +193,7 @@ namespace lucid::parser::dump
                 writeEnumDecl(node->as<EnumDeclAST>());
                 break;
             case ASTKind::EnumMember:
-                writeEnumMember(node->as<EnumMemberAST>()); // ← added
+                writeEnumMember(node->as<EnumMemberAST>());
                 break;
             case ASTKind::ResourceDecl:
                 writeResourceDecl(node->as<ResourceDeclAST>());
@@ -255,6 +255,11 @@ namespace lucid::parser::dump
 
         // ─── Type ──────────────────────────────────────────────────────────
 
+        /// A TypeIdAST has a `qualifier` (invalid when unqualified) and a
+        /// `name`. The separator that produced them — `.` or `::` — is not
+        /// part of the AST and does not appear in the JSON. A consumer that
+        /// wants to distinguish a qualified type from an unqualified one
+        /// checks whether `qualifier` is null.
         void writeTypeId(const TypeIdAST *node)
         {
             m_writer.beginObject();
@@ -326,11 +331,15 @@ namespace lucid::parser::dump
             writeNodeArray(attrs);
         }
 
+        /// An import has a full dotted `path` and a `name`. The name is
+        /// always the final segment of the path; there is no `as` clause.
+        /// The name is the module name, used by Sema as the `::` qualifier
+        /// in type positions.
         void writeImportDecl(const ImportDeclAST *node)
         {
             m_writer.beginObject();
             writeNodeHeader(node);
-            m_writer.kv("name", lookup(node->name)); // local alias
+            m_writer.kv("name", lookup(node->name)); // module name (final segment)
             m_writer.kv("path", lookup(node->path));
             writeAttributes(node->attributes);
             m_writer.endObject();
@@ -343,7 +352,7 @@ namespace lucid::parser::dump
             m_writer.kv("name", lookup(node->name));
 
             m_writer.key("members");
-            writeNodeArray(node->members); // now a span of EnumMemberAST*
+            writeNodeArray(node->members);
 
             writeAttributes(node->attributes);
             m_writer.endObject();
@@ -370,6 +379,11 @@ namespace lucid::parser::dump
             m_writer.endObject();
         }
 
+        /// A resource field has a `name`, a `type`, and an optional
+        /// `default`. The default is written as a nested node; a consumer
+        /// reads its `kind` to know which value form it is (LiteralValue,
+        /// FieldAccessValue, IdentifierValue, or InlineNodeValue). The
+        /// default is JSON null when the field has no default.
         void writeResourceField(const ResourceFieldAST *node)
         {
             m_writer.beginObject();
