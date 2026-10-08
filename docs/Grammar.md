@@ -49,8 +49,8 @@ Identifiers are case-sensitive. Keywords may not be used as identifiers.
 ### 1.4 Literals
 
 ```
-INT_LIT    ::= DIGIT+ | '0x' HEX+ | '0b' BIN+ | '0o' OCT+
-FLOAT_LIT  ::= DIGIT+ '.' DIGIT+ [ ('e'|'E') ['+'|'-'] DIGIT+ ]
+INT_LIT    ::= [ '+' | '-' ] ( DIGIT+ | '0x' HEX+ | '0b' BIN+ | '0o' OCT+ )
+FLOAT_LIT  ::= [ '+' | '-' ] DIGIT+ '.' DIGIT+ [ ('e'|'E') ['+'|'-'] DIGIT+ ]
 STRING_LIT ::= '"' { STRING_CHAR } '"'
 CHAR_LIT   ::= '\'' ( CHAR_CHAR | ESCAPE ) '\''
 BOOL_LIT   ::= 'true' | 'false'
@@ -67,6 +67,10 @@ ESCAPE      ::= '\' ( 'n' | 't' | 'r' | '\' | '\'' | '"' | '0' )
 
 A `FLOAT_LIT` requires at least one digit on each side of the `.`. `1.` and `.5` are not valid floats; write `1.0` and `0.5`.
 
+`INT_LIT` and `FLOAT_LIT` carry an optional leading sign. `-7` is a single token, not a `-` followed by `7`. The sign is part of the literal's text, and `LiteralValueAST::text` stores it as written (`"-7"`, `"+3.14"`, `"-0xFF"`).
+
+The sign is optional and lexical, not syntactic. There is no unary-minus production and no operator grammar. A `-` that is not followed by a digit, an `x`, a `b`, or an `o` (for a radix prefix) is a lexical error (`Lex_InvalidCharacter`), because `-` has no other meaning in the language.
+
 ### 1.5 Comments
 
 ```
@@ -75,6 +79,8 @@ block_comment ::= '/-' { ANY_CHAR | block_comment } '-/'    -- nestable
 ```
 
 Comments are ignored. There are no doc comments.
+
+The lexer recognizes `--` before it tries to read a signed number, so `--7` is a line comment whose text is `7`, not a signed literal.
 
 ### 1.6 Punctuation and attributes
 
@@ -89,6 +95,8 @@ Comments are ignored. There are no doc comments.
 `[` and `]` are **reserved**. No production in the current grammar uses them; they are lexed so that a future array or index syntax does not require a lexer change. A `[` or `]` in source is a syntax error at the parser, not the lexer.
 
 `:` is the resource-field separator (`name: type`). `::` is the module qualifier (`module::Name`). The two are distinct tokens; there is no ambiguity between them.
+
+`+` and `-` are **not** punctuation. They appear only as the leading sign of a numeric literal. They are not tokens on their own; the lexer consumes them as part of the literal it is reading.
 
 ### 1.7 Whitespace
 
@@ -252,7 +260,7 @@ literal ::= INT_LIT
 
 A `value` is what may appear as an argument to a node or as the default of a resource field.
 
-A bare literal is equivalent to a primitive node whose argument is that literal: `200.0` ≡ `Float32Node(200.0)`, `10` ≡ `Int32Node(10)`, `"hit.wav"` ≡ `StringNode("hit.wav")`.
+A bare literal is equivalent to a primitive node whose argument is that literal: `200.0` ≡ `Float32Node(200.0)`, `10` ≡ `Int32Node(10)`, `"hit.wav"` ≡ `StringNode("hit.wav")`. A signed literal is a literal like any other: `-400.0` ≡ `Float32Node(-400.0)`.
 
 An `IDENTIFIER` alone refers to a node or a resource by name.
 
@@ -298,7 +306,7 @@ A declaration ends at the first token that cannot continue it. Newlines are whit
 
 ### 3.2 No operators
 
-Values are literals, identifiers, field accesses, and inline nodes. There is no `a + b`. If the graph needs addition, it uses `AddNode(a, b)`.
+Values are literals, identifiers, field accesses, and inline nodes. There is no `a + b`. If the graph needs addition, it uses `AddNode(a, b)`. A leading sign on a numeric literal is not an operator; it is part of the literal.
 
 ### 3.3 Order-independent name resolution
 
@@ -309,7 +317,7 @@ Declarations may reference each other in any order. Sema performs two passes: a 
 Every production is uniquely determined by its first token. The parser needs one token of lookahead to decide:
 
 - `top_decl`: the first token identifies the declaration kind. If it is `@`, the parser reads the attribute list and then the declaration keyword. If it is `import`, `enum`, `resource`, or `node`, the parser reads the declaration directly.
-- `value`: the first token identifies the value kind (literal, identifier, or node expression start). An `IDENTIFIER` may be followed by `.` (field access) or `(` (node expression); one token of lookahead after the identifier decides.
+- `value`: the first token identifies the value kind (literal, identifier, or node expression start). An `IDENTIFIER` may be followed by `.` (field access) or `(` (node expression); one token of lookahead after the identifier decides. A signed literal is one token, so no special lookahead is needed.
 - `node_decl` followed by `on` vs. the next declaration: after the argument list, the parser checks whether the next token is `on`. If it is, it parses a trigger list; if not, the node declaration ends.
 - `resource_field`: after the field name and `:`, the parser reads a `type_id`. A `type_id` is `IDENTIFIER` or `IDENTIFIER '::' IDENTIFIER`. Because `::` is a distinct token from `:`, the field separator and the qualifier never collide. The parser reads `IDENTIFIER`, then either `:` (field separator; the type follows) or `::` (qualifier; the type name follows). One token of lookahead suffices.
 
@@ -322,6 +330,14 @@ There is no expression grammar. A `value` is one of four forms, each beginning w
 ### 3.6 No statement grammar
 
 There are no statements. The top level contains only declarations. There is no block structure beyond the braces that delimit enum and resource bodies.
+
+### 3.7 Signed literals
+
+A numeric literal may carry a leading `+` or `-`. The sign is part of the literal token, not a separate operator. `-400.0` is one `FLOAT_LIT`, not a `-` followed by `400.0`. The lexer reads the sign when the next character is a digit (or a radix prefix), and stores the whole lexeme as the literal's text.
+
+There is no unary-minus production and no operator grammar. `a - b` is not valid; a graph that needs subtraction uses `SubtractNode(a, b)`.
+
+The `-` in `--` (a line comment) is not a literal sign. The lexer recognizes `--` before it tries to read a signed number, so `--7` is a line comment, not a signed literal.
 
 ---
 
@@ -388,6 +404,18 @@ The registry assigns numeric IDs to node types and types. These IDs are used in 
 The registry convention says registration happens once at startup, before any graph is loaded. If plugins may register node types, they must do so during startup, before the first graph load.
 
 **Open question:** What is the interface for plugin registration? The current spec does not describe it.
+
+### 4.10 Signed literals in radix forms
+
+The grammar allows `-0xFF`, `-0b1010`, and `-0o17`. Is a sign meaningful for a radix literal? `0xFF` is unsigned in most languages; `-0xFF` is either `-(0xFF)` or a malformed token, depending on the language.
+
+**Open question:** Should the sign be allowed on all radix forms, or only on decimal integers and floats? The current grammar allows it on all four.
+
+### 4.11 Explicit `+` sign
+
+The grammar allows an explicit `+` on a numeric literal (`+7`, `+3.14`). This is symmetric with `-` and costs one lexer branch. It is rarely useful; a reader who sees `+7` may wonder why the author wrote it.
+
+**Open question:** Should `+` be allowed, or should the grammar accept only `-`? The current grammar allows both, for symmetry.
 
 ---
 

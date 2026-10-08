@@ -35,8 +35,10 @@
 ///     escape sequences resolved. The formatter re-escapes on output.
 ///   - For a char, the single resolved character. The formatter re-quotes
 ///     and re-escapes.
-///   - For a number, the raw lexeme ("0xFF", "42", "1.5e9"). The lexeme
-///     has no sign; the grammar has no unary minus.
+///   - For a number, the raw lexeme, including an optional leading sign,
+///     e.g. "0xFF", "42", "-7", "+3.14", "-1.5e9". The sign is part of
+///     the literal token, not a separate operator; the grammar has no
+///     unary-minus production.
 ///   - For true/false/nil, the spelling ("true", "false", "nil").
 ///
 /// Re-escaping is exact because the grammar's ESCAPE production lists
@@ -111,9 +113,9 @@ struct LiteralValueAST : BaseAST
 
     /// The literal's content.
     ///
-    ///   - Int / Float:  the raw lexeme, e.g. "0xFF", "42", "1.5e9". The
-    ///                   grammar has no unary minus, so the lexeme is
-    ///                   never signed.
+    ///   - Int / Float:  the raw lexeme, including an optional leading
+    ///                   sign, e.g. "0xFF", "42", "-7", "+3.14",
+    ///                   "-1.5e9". The sign is part of the token.
     ///   - String:       the resolved content, escapes applied, no quotes.
     ///   - Char:         the resolved single character, no quotes.
     ///   - Bool:         "true" or "false".
