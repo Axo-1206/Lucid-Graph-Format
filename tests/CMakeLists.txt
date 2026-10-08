@@ -164,11 +164,17 @@ add_executable(test_sema
     sema/test_graph.cpp
     sema/test_sema_api.cpp
     sema/test_sema_smoke.cpp
+    sema/test_symbol_table.cpp
+    sema/test_symbol_collector.cpp
 )
 
 target_link_libraries(test_sema PRIVATE
     lucid_sema
     Catch2::Catch2WithMain
+)
+
+target_include_directories(test_sema PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../sema/src"
 )
 
 target_compile_options(test_sema PRIVATE ${LUCID_CXX_WARNINGS})

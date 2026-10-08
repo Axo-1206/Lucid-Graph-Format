@@ -189,6 +189,9 @@ endif()
 
 add_library(lucid_sema STATIC
     sema/src/sema/Registry.cpp
+    sema/src/sema/SymbolTable.cpp
+    sema/src/sema/SymbolCollector.cpp
+    sema/src/sema/Sema.cpp
 )
 
 target_include_directories(lucid_sema

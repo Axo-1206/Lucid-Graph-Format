@@ -2,6 +2,7 @@
 /// @brief Implementation of DiagnosticEngine.
 
 #include "core/diagnostics/Diagnostic.hpp"
+#include "core/ast/BaseAST.hpp"
 #include "core/memory/StringPool.hpp"
 
 namespace lucid::diag
@@ -209,9 +210,13 @@ namespace lucid::diag
     // uses the errorAt/warningAt/noteAt/hintAt variants, which pass a location
     // explicitly.
 
-    SourceLocation locationOf(const BaseAST * /*node*/) noexcept
+    SourceLocation locationOf(const BaseAST *node) noexcept
     {
-        return SourceLocation{};
+        if (node == nullptr)
+        {
+            return SourceLocation{};
+        }
+        return node->loc;
     }
 
 } // namespace lucid::diag
