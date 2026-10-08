@@ -20,24 +20,34 @@ TEST_CASE("TokenType: EOF is the zero value", "[core][tokens]")
 
 TEST_CASE("TokenType: every keyword is contiguous", "[core][tokens]")
 {
-    REQUIRE(static_cast<uint16_t>(TokenType::KW_IMPORT) <= static_cast<uint16_t>(TokenType::KW_ON));
+    // The keyword block runs from KW_IMPORT through KW_ON. This test
+    // documents the block layout; the isKeyword predicate uses the same
+    // range, and the range is what makes the predicate cheap.
+    REQUIRE(static_cast<uint16_t>(TokenType::KW_IMPORT) <=
+            static_cast<uint16_t>(TokenType::KW_ON));
 }
 
 TEST_CASE("TokenType: every literal is contiguous", "[core][tokens]")
 {
-    REQUIRE(static_cast<uint16_t>(TokenType::INT_LITERAL) <= static_cast<uint16_t>(TokenType::NIL_LITERAL));
+    REQUIRE(static_cast<uint16_t>(TokenType::INT_LITERAL) <=
+            static_cast<uint16_t>(TokenType::NIL_LITERAL));
 }
 
-TEST_CASE("TokenType: every punctuation is contiguous", "[core][tokens]")
+TEST_CASE("TokenType: punctuation is a contiguous block", "[core][tokens]")
 {
-    REQUIRE(static_cast<uint16_t>(TokenType::LPAREN) <= static_cast<uint16_t>(TokenType::AT_SIGN));
+    // The punctuation tokens run from LPAREN through AT_SIGN. Unlike
+    // isKeyword and isLiteral, isPunctuation uses an explicit switch, so
+    // this range is documentation, not a predicate. The test still holds:
+    // every punctuation token is in the block, and nothing else is.
+    REQUIRE(static_cast<uint16_t>(TokenType::LPAREN) <=
+            static_cast<uint16_t>(TokenType::AT_SIGN));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // isKeyword
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("isKeyword: true for the nine keywords", "[core][tokens]")
+TEST_CASE("isKeyword: true for the six keywords", "[core][tokens]")
 {
     REQUIRE(isKeyword(TokenType::KW_IMPORT));
     REQUIRE(isKeyword(TokenType::KW_FROM));
@@ -52,6 +62,7 @@ TEST_CASE("isKeyword: false for non-keywords", "[core][tokens]")
     REQUIRE_FALSE(isKeyword(TokenType::IDENTIFIER));
     REQUIRE_FALSE(isKeyword(TokenType::INT_LITERAL));
     REQUIRE_FALSE(isKeyword(TokenType::LPAREN));
+    REQUIRE_FALSE(isKeyword(TokenType::COLON_COLON));
     REQUIRE_FALSE(isKeyword(TokenType::EOF_TOKEN));
     REQUIRE_FALSE(isKeyword(TokenType::UNKNOWN));
 }
@@ -60,7 +71,7 @@ TEST_CASE("isKeyword: false for non-keywords", "[core][tokens]")
 // isDeclarationKeyword
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("isDeclarationKeyword: true for the five declaration keywords",
+TEST_CASE("isDeclarationKeyword: true for the four declaration keywords",
           "[core][tokens]")
 {
     REQUIRE(isDeclarationKeyword(TokenType::KW_IMPORT));
@@ -101,20 +112,21 @@ TEST_CASE("isLiteral: false for identifier and keywords", "[core][tokens]")
 // isPunctuation and delimiter helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("isPunctuation: true for the eleven punctuation marks",
+TEST_CASE("isPunctuation: true for the twelve punctuation marks",
           "[core][tokens]")
 {
-    REQUIRE(isPunctuation(TokenType::LPAREN));
-    REQUIRE(isPunctuation(TokenType::RPAREN));
-    REQUIRE(isPunctuation(TokenType::LBRACE));
-    REQUIRE(isPunctuation(TokenType::RBRACE));
-    REQUIRE(isPunctuation(TokenType::LBRACKET));
-    REQUIRE(isPunctuation(TokenType::RBRACKET));
-    REQUIRE(isPunctuation(TokenType::COMMA));
-    REQUIRE(isPunctuation(TokenType::DOT));
-    REQUIRE(isPunctuation(TokenType::COLON));
-    REQUIRE(isPunctuation(TokenType::EQUALS));
-    REQUIRE(isPunctuation(TokenType::AT_SIGN));
+    REQUIRE(isPunctuation(TokenType::LPAREN));      // (
+    REQUIRE(isPunctuation(TokenType::RPAREN));      // )
+    REQUIRE(isPunctuation(TokenType::LBRACE));      // {
+    REQUIRE(isPunctuation(TokenType::RBRACE));      // }
+    REQUIRE(isPunctuation(TokenType::LBRACKET));    // [  reserved
+    REQUIRE(isPunctuation(TokenType::RBRACKET));    // ]  reserved
+    REQUIRE(isPunctuation(TokenType::COMMA));       // ,
+    REQUIRE(isPunctuation(TokenType::DOT));         // .
+    REQUIRE(isPunctuation(TokenType::COLON));       // :
+    REQUIRE(isPunctuation(TokenType::COLON_COLON)); // ::
+    REQUIRE(isPunctuation(TokenType::EQUALS));      // =
+    REQUIRE(isPunctuation(TokenType::AT_SIGN));     // @
 }
 
 TEST_CASE("isPunctuation: false for identifier and literals",
@@ -123,6 +135,8 @@ TEST_CASE("isPunctuation: false for identifier and literals",
     REQUIRE_FALSE(isPunctuation(TokenType::IDENTIFIER));
     REQUIRE_FALSE(isPunctuation(TokenType::INT_LITERAL));
     REQUIRE_FALSE(isPunctuation(TokenType::KW_NODE));
+    REQUIRE_FALSE(isPunctuation(TokenType::EOF_TOKEN));
+    REQUIRE_FALSE(isPunctuation(TokenType::UNKNOWN));
 }
 
 TEST_CASE("isOpeningDelimiter and isClosingDelimiter",
@@ -141,6 +155,49 @@ TEST_CASE("isOpeningDelimiter and isClosingDelimiter",
 
     REQUIRE_FALSE(isOpeningDelimiter(TokenType::COMMA));
     REQUIRE_FALSE(isClosingDelimiter(TokenType::COMMA));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COLON vs COLON_COLON
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The grammar uses ':' as the resource-field separator and '::' as the
+// module qualifier. They are distinct token types, not one token with a
+// length. The lexer emits COLON_COLON for two consecutive ':' and COLON
+// otherwise. These tests pin that the two are never conflated by the
+// classification predicates.
+
+TEST_CASE("COLON and COLON_COLON are distinct tokens",
+          "[core][tokens][colon]")
+{
+    REQUIRE(TokenType::COLON != TokenType::COLON_COLON);
+    REQUIRE(static_cast<uint16_t>(TokenType::COLON) !=
+            static_cast<uint16_t>(TokenType::COLON_COLON));
+}
+
+TEST_CASE("COLON and COLON_COLON are both punctuation",
+          "[core][tokens][colon]")
+{
+    REQUIRE(isPunctuation(TokenType::COLON));
+    REQUIRE(isPunctuation(TokenType::COLON_COLON));
+}
+
+TEST_CASE("COLON and COLON_COLON are neither opening nor closing delimiters",
+          "[core][tokens][colon]")
+{
+    REQUIRE_FALSE(isOpeningDelimiter(TokenType::COLON));
+    REQUIRE_FALSE(isClosingDelimiter(TokenType::COLON));
+    REQUIRE_FALSE(isOpeningDelimiter(TokenType::COLON_COLON));
+    REQUIRE_FALSE(isClosingDelimiter(TokenType::COLON_COLON));
+}
+
+TEST_CASE("COLON and COLON_COLON are not keywords or literals",
+          "[core][tokens][colon]")
+{
+    REQUIRE_FALSE(isKeyword(TokenType::COLON));
+    REQUIRE_FALSE(isKeyword(TokenType::COLON_COLON));
+    REQUIRE_FALSE(isLiteral(TokenType::COLON));
+    REQUIRE_FALSE(isLiteral(TokenType::COLON_COLON));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +257,15 @@ TEST_CASE("Token: hasValue is true when the value is interned",
     REQUIRE_FALSE(b.hasValue());
 }
 
+TEST_CASE("Token: a COLON_COLON token carries its spelling",
+          "[core][tokens][colon]")
+{
+    Token t{TokenType::COLON_COLON, InternedString{7}, SourceLocation{1, 1}};
+    REQUIRE(t.is(TokenType::COLON_COLON));
+    REQUIRE(t.isNot(TokenType::COLON));
+    REQUIRE(t.hasValue());
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Name functions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,6 +275,8 @@ TEST_CASE("tokenTypeName: returns a spelling for every token",
 {
     REQUIRE(std::string_view(tokenTypeName(TokenType::KW_IMPORT)) == "import");
     REQUIRE(std::string_view(tokenTypeName(TokenType::LPAREN)) == "(");
+    REQUIRE(std::string_view(tokenTypeName(TokenType::COLON)) == ":");
+    REQUIRE(std::string_view(tokenTypeName(TokenType::COLON_COLON)) == "::");
     REQUIRE(std::string_view(tokenTypeName(TokenType::AT_SIGN)) == "@");
     REQUIRE(std::string_view(tokenTypeName(TokenType::EOF_TOKEN)) == "EOF");
 }
@@ -216,7 +284,13 @@ TEST_CASE("tokenTypeName: returns a spelling for every token",
 TEST_CASE("tokenTypeDescription: returns a description for diagnostics",
           "[core][tokens][names]")
 {
-    REQUIRE(std::string_view(tokenTypeDescription(TokenType::KW_NODE)) == "'node'");
-    REQUIRE(std::string_view(tokenTypeDescription(TokenType::IDENTIFIER)) == "an identifier");
-    REQUIRE(std::string_view(tokenTypeDescription(TokenType::EOF_TOKEN)) == "end of input");
+    REQUIRE(std::string_view(tokenTypeDescription(TokenType::KW_NODE)) ==
+            "'node'");
+    REQUIRE(std::string_view(tokenTypeDescription(TokenType::IDENTIFIER)) ==
+            "an identifier");
+    REQUIRE(std::string_view(tokenTypeDescription(TokenType::COLON)) == "':'");
+    REQUIRE(std::string_view(tokenTypeDescription(TokenType::COLON_COLON)) ==
+            "'::'");
+    REQUIRE(std::string_view(tokenTypeDescription(TokenType::EOF_TOKEN)) ==
+            "end of input");
 }

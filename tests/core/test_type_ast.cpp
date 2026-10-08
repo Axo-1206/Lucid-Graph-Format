@@ -176,7 +176,7 @@ TEST_CASE("TypeIdAST: the grammar's `Key` example",
     REQUIRE(t.isSimple());
 }
 
-TEST_CASE("TypeIdAST: the grammar's `core.Key` example",
+TEST_CASE("TypeIdAST: the grammar's `core::Key` example",
           "[core][ast][type]")
 {
     StringPool pool;

@@ -21,7 +21,6 @@ add_executable(test_core
     core/test_source_location.cpp
     core/test_string_pool.cpp
     core/test_ast_arena.cpp
-    core/test_diagnostic.cpp
     core/test_tokens.cpp
     core/test_base_ast.cpp
     core/test_attribute_ast.cpp

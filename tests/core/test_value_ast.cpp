@@ -95,6 +95,22 @@ TEST_CASE("LiteralValueAST: negative integer keeps its sign",
     REQUIRE(pool.lookupView(lit.text) == "-7");
 }
 
+TEST_CASE("LiteralValueAST: negative float keeps its sign",
+          "[core][ast][value][literal]")
+{
+    StringPool pool;
+    LiteralValueAST lit{LiteralKind::Float, pool.intern("-400.0")};
+    REQUIRE(pool.lookupView(lit.text) == "-400.0");
+}
+
+TEST_CASE("LiteralValueAST: explicit plus sign is preserved",
+          "[core][ast][value][literal]")
+{
+    StringPool pool;
+    LiteralValueAST lit{LiteralKind::Int, pool.intern("+7")};
+    REQUIRE(pool.lookupView(lit.text) == "+7");
+}
+
 TEST_CASE("LiteralValueAST: float literal",
           "[core][ast][value][literal]")
 {

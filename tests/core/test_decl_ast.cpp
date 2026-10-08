@@ -61,14 +61,14 @@ TEST_CASE("ImportDeclAST: `import core.keys`",
     REQUIRE(d.attributes.empty());
 }
 
-TEST_CASE("ImportDeclAST: `import core.keys as k`",
+TEST_CASE("ImportDeclAST: `import health` (a single-segment path)",
           "[core][ast][decl][import]")
 {
     StringPool pool;
-    ImportDeclAST d{pool.intern("core.keys"), pool.intern("k")};
+    ImportDeclAST d{pool.intern("health"), pool.intern("health")};
 
-    REQUIRE(pool.lookupView(d.path) == "core.keys");
-    REQUIRE(pool.lookupView(d.name) == "k");
+    REQUIRE(pool.lookupView(d.path) == "health");
+    REQUIRE(pool.lookupView(d.name) == "health");
 }
 
 TEST_CASE("ImportDeclAST: isa distinguishes it from other declarations",
@@ -159,6 +159,7 @@ TEST_CASE("ResourceFieldAST: `speed: float`",
     REQUIRE(pool.lookupView(f.name) == "speed");
     REQUIRE(f.type == type);
     REQUIRE_FALSE(f.hasDefault());
+    REQUIRE(f.defaultValue == nullptr);
 }
 
 TEST_CASE("ResourceFieldAST: `speed: float = 200.0`",
@@ -177,7 +178,11 @@ TEST_CASE("ResourceFieldAST: `speed: float = 200.0`",
     REQUIRE(f.type == type);
     REQUIRE(f.hasDefault());
     REQUIRE(f.defaultValue == def);
-    REQUIRE(f.defaultValue->kind == LiteralKind::Float);
+
+    // defaultValue is a BaseAST*. The node kind is LiteralValue; the
+    // literal's kind is a separate field inside LiteralValueAST.
+    REQUIRE(f.defaultValue->isa<LiteralValueAST>());
+    REQUIRE(f.defaultValue->as<LiteralValueAST>()->kind == LiteralKind::Float);
 }
 
 TEST_CASE("ResourceFieldAST: a field default with a string literal",
@@ -193,7 +198,98 @@ TEST_CASE("ResourceFieldAST: a field default with a string literal",
     ResourceFieldAST f{pool.intern("greeting"), type, def};
 
     REQUIRE(f.hasDefault());
-    REQUIRE(f.defaultValue->kind == LiteralKind::String);
+    REQUIRE(f.defaultValue->isa<LiteralValueAST>());
+    REQUIRE(f.defaultValue->as<LiteralValueAST>()->kind == LiteralKind::String);
+}
+
+TEST_CASE("ResourceFieldAST: a field default with an enum member access",
+          "[core][ast][decl][field]")
+{
+    // `key_left: Key = Key.A`
+    //
+    // The default is a value, not a literal. The field access is the
+    // reason ResourceFieldAST's constructor takes BaseAST* and not
+    // LiteralValueAST*.
+    ASTArena arena;
+    StringPool pool;
+
+    auto *type = arena.make<TypeIdAST>(pool.intern("Key"));
+    auto *def = arena.make<FieldAccessValueAST>(
+        pool.intern("Key"), pool.intern("A"));
+
+    ResourceFieldAST f{pool.intern("key_left"), type, def};
+
+    REQUIRE(f.hasDefault());
+    REQUIRE(f.defaultValue == def);
+    REQUIRE(f.defaultValue->isa<FieldAccessValueAST>());
+    REQUIRE(f.defaultValue->as<FieldAccessValueAST>()->object ==
+            pool.intern("Key"));
+    REQUIRE(f.defaultValue->as<FieldAccessValueAST>()->field ==
+            pool.intern("A"));
+}
+
+TEST_CASE("ResourceFieldAST: a field default with a bare identifier",
+          "[core][ast][decl][field]")
+{
+    // `body: BodyRef = player_body`
+    ASTArena arena;
+    StringPool pool;
+
+    auto *type = arena.make<TypeIdAST>(pool.intern("BodyRef"));
+    auto *def = arena.make<IdentifierValueAST>(pool.intern("player_body"));
+
+    ResourceFieldAST f{pool.intern("body"), type, def};
+
+    REQUIRE(f.hasDefault());
+    REQUIRE(f.defaultValue->isa<IdentifierValueAST>());
+    REQUIRE(f.defaultValue->as<IdentifierValueAST>()->name ==
+            pool.intern("player_body"));
+}
+
+TEST_CASE("ResourceFieldAST: a field default with an inline node",
+          "[core][ast][decl][field]")
+{
+    // `speed: float = Float32Node(1.0)`
+    ASTArena arena;
+    StringPool pool;
+
+    auto *type = arena.make<TypeIdAST>(pool.intern("float"));
+    auto *arg = arena.make<LiteralValueAST>(
+        LiteralKind::Float, pool.intern("1.0"));
+    auto args = arena.makeSpan<BaseAST *>({static_cast<BaseAST *>(arg)});
+    auto *nodeType = arena.make<TypeIdAST>(pool.intern("Float32Node"));
+    auto *expr = arena.make<NodeExprAST>(nodeType, args);
+    auto *def = arena.make<InlineNodeValueAST>(expr);
+
+    ResourceFieldAST f{pool.intern("speed"), type, def};
+
+    REQUIRE(f.hasDefault());
+    REQUIRE(f.defaultValue->isa<InlineNodeValueAST>());
+    REQUIRE(f.defaultValue->as<InlineNodeValueAST>()->node == expr);
+}
+
+TEST_CASE("ResourceFieldAST: no default vs. explicit zero default",
+          "[core][ast][decl][field]")
+{
+    // `hasDefault()` distinguishes "no default written" from "default
+    // written as the zero value of the type." Both are valid; Sema treats
+    // them differently when it initializes the field.
+    ASTArena arena;
+    StringPool pool;
+
+    auto *intType = arena.make<TypeIdAST>(pool.intern("int"));
+
+    // No default: hasDefault() is false.
+    ResourceFieldAST noDefault{pool.intern("hp"), intType};
+    REQUIRE_FALSE(noDefault.hasDefault());
+    REQUIRE(noDefault.defaultValue == nullptr);
+
+    // Explicit zero: hasDefault() is true.
+    auto *zero = arena.make<LiteralValueAST>(
+        LiteralKind::Int, pool.intern("0"));
+    ResourceFieldAST explicitZero{pool.intern("hp"), intType, zero};
+    REQUIRE(explicitZero.hasDefault());
+    REQUIRE(explicitZero.defaultValue == zero);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -340,6 +436,29 @@ TEST_CASE("NodeDeclAST: `node damage = Damage(body, 10) on on_hit, on_other`",
     REQUIRE(d.expr->args.size() == 2);
     REQUIRE(d.triggers.size() == 2);
     REQUIRE(pool.lookupView(d.triggers[1]) == "on_other");
+}
+
+TEST_CASE("NodeDeclAST: a qualified node type",
+          "[core][ast][decl][node]")
+{
+    // `node h = physics::Body(player)`
+    //
+    // The node type is a TypeIdAST with qualifier = "physics" and
+    // name = "Body". The parser does not resolve the qualifier; Sema does.
+    ASTArena arena;
+    StringPool pool;
+
+    auto *type = arena.make<TypeIdAST>(
+        pool.intern("physics"), pool.intern("Body"));
+    auto *arg = arena.make<IdentifierValueAST>(pool.intern("player"));
+    auto args = arena.makeSpan<BaseAST *>({static_cast<BaseAST *>(arg)});
+    auto *expr = arena.make<NodeExprAST>(type, args);
+
+    NodeDeclAST d{pool.intern("h"), expr};
+
+    REQUIRE(d.expr->type->isQualified());
+    REQUIRE(d.expr->type->qualifier == pool.intern("physics"));
+    REQUIRE(d.expr->type->name == pool.intern("Body"));
 }
 
 TEST_CASE("NodeDeclAST: isa distinguishes it from other declarations",
