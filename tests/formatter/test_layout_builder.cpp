@@ -61,9 +61,12 @@ TEST_CASE("LayoutBuilder formats a dotted import", "[layout]")
     CHECK(fmt("import core.keys").text == "import core.keys\n");
 }
 
-TEST_CASE("LayoutBuilder formats an aliased import", "[layout]")
+TEST_CASE("LayoutBuilder drops a redundant module name on an import",
+          "[layout]")
 {
-    CHECK(fmt("import core.keys as k").text == "import core.keys as k\n");
+    // The parser computes the module name from the path; the formatter
+    // never emits an `as` clause, because the grammar has none.
+    CHECK(fmt("import core.keys").text == "import core.keys\n");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,9 +156,9 @@ TEST_CASE("LayoutBuilder formats a resource with fields", "[layout]")
 
 TEST_CASE("LayoutBuilder formats a qualified field type", "[layout]")
 {
-    CHECK(fmt("resource R { key: core.Key }").text ==
+    CHECK(fmt("resource R { key: core::Key }").text ==
           "resource R {\n"
-          "    key: core.Key\n"
+          "    key: core::Key\n"
           "}\n");
 }
 
