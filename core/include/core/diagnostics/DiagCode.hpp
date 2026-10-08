@@ -228,13 +228,13 @@ namespace lucid::diag
         // constant-fold, but the codes exist for the pipeline's single
         // diagnostic engine.
 
-        Type_Mismatch = 4001,             // arg type does not match slot
-        Type_ArgCountMismatch = 4002,     // too many or too few args
-        Type_UnknownNodeType = 4003,      // NodeType not in registry
-        Type_UnknownType = 4004,          // type_id not in registry
+        Type_Mismatch = 4001,           // arg type does not match slot
+        Type_ArgCountMismatch = 4002,   // too many or too few args
+        Type_UnknownNodeType = 4003,    // NodeType not in registry
+        Type_UnknownType = 4004,        // type_id not in registry
         Type_InvalidDefault = 4005,     // resource default type mismatch
         Type_InvalidBinding = 4006,     // binding mismatch between value and target
-        Type_InvalidNodeArg = 4007,    // argument not a valid value
+        Type_InvalidNodeArg = 4007,     // argument not a valid value
         Type_InvalidFieldAccess = 4008, // base is not field-accessible
 
         Value_DuplicateFieldDefault = 4101, // resource with two defaults
@@ -268,6 +268,22 @@ namespace lucid::diag
         Import_Circular = 5102,       // A imports B imports A
         Import_AliasCollision = 5103, // two imports bind the same name
         Import_NotAFile = 5104,       // path resolves to a directory
+
+        // ═════════════════════════════════════════════════════════════════════════
+        // EVENT RULES (5300-5399)
+        // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Sema's rules about the Event type and node subscription:
+        //
+        //   - An `on` clause's target must be a trigger source.
+        //   - An action node must have at least one `on` clause.
+        //   - A node port cannot have type Event.
+        //   - A composite Event output's value must resolve to a trigger.
+
+        Event_OnTargetNotTrigger = 5301,
+        Event_ActionWithoutOn = 5302,
+        Event_PortNotAllowed = 5303,
+        Event_OutputNotTrigger = 5304,
 
         // ═════════════════════════════════════════════════════════════════════════
         // INTERNAL / PANIC (7000-7099)
