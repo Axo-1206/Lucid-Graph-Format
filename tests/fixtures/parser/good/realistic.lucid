@@ -11,11 +11,11 @@ enum Direction {
 
 @export
 resource PlayerConfig {
-    speed: float = 200.0
-    jump_force: float = -400.0
-    max_hp: int = 100
-    key_left: Direction = Direction.North
-    key_right: Direction = Direction.South
+    speed: float = 200.0,
+    jump_force: float = -400.0,
+    max_hp: int = 100,
+    key_left: Direction = Direction.North,
+    key_right: Direction = Direction.South,
 }
 
 node body = BodyNode(player)
