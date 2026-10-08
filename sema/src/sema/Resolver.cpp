@@ -7,20 +7,6 @@
 /// contains and recurses into the sub-nodes that can contain more
 /// references. The walk covers every declaration's body, every value,
 /// every type, and every node expression.
-///
-/// ─── Scope ────────────────────────────────────────────────────────────────
-/// In the current grammar, the only scopes are the module scope and a
-/// composite's local scope. A composite's body can reference the
-/// composite's inputs, its resources, its nodes, and the enclosing
-/// module's symbols. It cannot reference another composite's internals.
-///
-/// For Step 7.3, the resolver treats the module scope as the only
-/// scope. Composite bodies are resolved against the module's symbol
-/// table, plus a local scope built from the composite's inputs and
-/// internal declarations. Composite-local resolution is a Step 7.6
-/// concern (when composites are expanded); for now, the resolver
-/// resolves composite-internal names against the composite itself as
-/// best it can, and defers the rest.
 
 #include "Resolver.hpp"
 
@@ -83,13 +69,10 @@ namespace lucid::sema
         void resolveEnumDecl(const EnumDeclAST *decl);
         void resolveResourceDecl(const ResourceDeclAST *decl);
         void resolveNodeDecl(const NodeDeclAST *decl);
-        void resolveCompositeDecl(const CompositeDeclAST *decl);
 
-        // ─── Fields, inputs, outputs ───────────────────────────────────────
+        // ─── Fields, ───────────────────────────────────────────────────────
 
         void resolveResourceField(const ResourceFieldAST *field);
-        void resolveCompositeInput(const CompositeInputAST *input);
-        void resolveCompositeOutput(const CompositeOutputAST *output);
 
         // ─── Values ────────────────────────────────────────────────────────
 
@@ -151,9 +134,6 @@ namespace lucid::sema
             break;
         case ASTKind::NodeDecl:
             resolveNodeDecl(decl->as<NodeDeclAST>());
-            break;
-        case ASTKind::CompositeDecl:
-            resolveCompositeDecl(decl->as<CompositeDeclAST>());
             break;
         default:
             break;
@@ -221,8 +201,7 @@ namespace lucid::sema
         }
 
         // The node's triggers. Each trigger name is a reference to
-        // another node in the same module (or to a composite output
-        // exposed as an Event, which is deferred to Step 7.6).
+        // another node in the same module).
         resolveTriggers(decl->triggers, decl);
     }
 
@@ -259,61 +238,6 @@ namespace lucid::sema
             // resolution map to find which nodes subscribe to which
             // triggers.
             m_resolutions.record(nodeDecl, symbol->decl);
-        }
-    }
-
-    void Resolver::resolveCompositeDecl(const CompositeDeclAST *decl)
-    {
-        if (decl == nullptr)
-            return;
-
-        // Composite inputs and outputs are the composite's interface.
-        // They can reference the enclosing module's symbols (e.g., a
-        // type in `input { max: int }`), and their resolution is part
-        // of the module's resolution.
-        //
-        // The composite's body — its internal resources, enums, and
-        // nodes — is resolved in Step 7.6 when the composite is
-        // expanded. The body's references are to the composite's local
-        // scope, which is not available here.
-        for (CompositeInputAST *input : decl->inputs)
-        {
-            resolveCompositeInput(input);
-        }
-
-        for (CompositeOutputAST *output : decl->outputs)
-        {
-            resolveCompositeOutput(output);
-        }
-
-        // Intentionally do not descend into decl->body. Step 7.6 does.
-        (void)decl->body;
-    }
-
-    void Resolver::resolveCompositeInput(const CompositeInputAST *input)
-    {
-        if (input == nullptr)
-            return;
-
-        if (input->type != nullptr)
-        {
-            resolveTypeId(input->type);
-        }
-    }
-
-    void Resolver::resolveCompositeOutput(const CompositeOutputAST *output)
-    {
-        if (output == nullptr)
-            return;
-
-        if (output->type != nullptr)
-        {
-            resolveTypeId(output->type);
-        }
-
-        if (output->value != nullptr)
-        {
-            resolveValue(output->value);
         }
     }
 
@@ -379,9 +303,6 @@ namespace lucid::sema
         //     up `speed` among its fields.
         //   - An enum: `Key.W` → resolve `Key`, then look up `W` in
         //     the registry's enum members (Step 7.4).
-        //   - A composite output: `player_health.current` → resolve
-        //     `player_health` (a composite use), then look up `current`
-        //     among the composite's outputs (Step 7.6).
         //   - An import alias: `health.Health` → resolve `health` (an
         //     import), then look up `Health` in the imported module's
         //     symbol table (Step 7.8).

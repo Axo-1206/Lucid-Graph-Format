@@ -11,13 +11,6 @@
 ///   3. No node port declares the Event type (defensive; the registry
 ///      should not have such a port).
 ///
-/// ─── What Pass 4 defers ───────────────────────────────────────────────────
-/// Two rules require composite expansion and are checked in Step 7.6:
-///
-///   - An `on` clause that targets a composite Event output
-///     (`player_health.on_death`).
-///   - A composite Event output's value resolving to a trigger node.
-///
 /// ─── Inputs ───────────────────────────────────────────────────────────────
 /// The module AST, the symbol table (to find trigger declarations), the
 /// resolution map (to find what `on` targets resolve to), and the

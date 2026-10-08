@@ -109,9 +109,6 @@ namespace lucid::sema
         void checkResourceDecl(const ResourceDeclAST *decl);
         void checkResourceField(const ResourceFieldAST *field);
         void checkNodeDecl(const NodeDeclAST *decl);
-        void checkCompositeDecl(const CompositeDeclAST *decl);
-        void checkCompositeInput(const CompositeInputAST *input);
-        void checkCompositeOutput(const CompositeOutputAST *output);
 
         // ─── Expressions ───────────────────────────────────────────────────
 
@@ -183,9 +180,6 @@ namespace lucid::sema
             break;
         case ASTKind::NodeDecl:
             checkNodeDecl(decl->as<NodeDeclAST>());
-            break;
-        case ASTKind::CompositeDecl:
-            checkCompositeDecl(decl->as<CompositeDeclAST>());
             break;
         default:
             break;
@@ -265,81 +259,6 @@ namespace lucid::sema
         if (decl->expr != nullptr)
         {
             checkNodeExpr(decl->expr);
-        }
-    }
-
-    void TypeChecker::checkCompositeDecl(const CompositeDeclAST *decl)
-    {
-        if (decl == nullptr)
-            return;
-
-        for (CompositeInputAST *input : decl->inputs)
-        {
-            checkCompositeInput(input);
-        }
-        for (CompositeOutputAST *output : decl->outputs)
-        {
-            checkCompositeOutput(output);
-        }
-        // Composite bodies are checked in Step 7.6.
-    }
-
-    void TypeChecker::checkCompositeInput(const CompositeInputAST *input)
-    {
-        if (input == nullptr)
-            return;
-        if (input->type == nullptr)
-            return;
-
-        const TypeId inputType = checkTypeId(input->type);
-
-        if (inputType.isValid() && inputType.isEvent())
-        {
-            m_diag.error(DiagCode::Type_UnknownType, input,
-                         "a composite input cannot have type Event");
-        }
-    }
-
-    void TypeChecker::checkCompositeOutput(const CompositeOutputAST *output)
-    {
-        if (output == nullptr)
-            return;
-        if (output->type == nullptr)
-            return;
-
-        const TypeId outputType = checkTypeId(output->type);
-        if (!outputType.isValid())
-            return;
-
-        // The output's value must match the output's type.
-        if (output->value == nullptr)
-            return;
-
-        const TypeId valueType = checkValue(output->value);
-
-        // For Event outputs, the value must resolve to a trigger node.
-        // That is checked in Step 7.5; here we only check that the
-        // value exists and is a reference.
-        if (outputType.isEvent())
-        {
-            // The value's type is not a value type; no type check here.
-            return;
-        }
-
-        // nil is allowed for handle types.
-        const bool isNil = (valueType.kind == TypeId::Kind::Invalid &&
-                            output->value->kind == ASTKind::LiteralValue &&
-                            output->value->as<LiteralValueAST>()->kind ==
-                                LiteralKind::Nil);
-
-        if (isNil && outputType.isHandle())
-            return;
-
-        if (valueType != outputType)
-        {
-            m_diag.error(DiagCode::Type_InvalidOutputBinding, output->value,
-                         "output binding's type does not match the output's "
-                         "declared type");
         }
     }
 
@@ -452,17 +371,6 @@ namespace lucid::sema
             m_types.record(value, TypeId{});
             return TypeId{};
 
-        case ASTKind::CompositeInput:
-            // Composite inputs are not visible at module scope; the
-            // composite body (Step 7.6) handles them.
-            m_types.record(value, TypeId{});
-            return TypeId{};
-
-        case ASTKind::CompositeDecl:
-            // A composite reference as a bare identifier: not a value.
-            m_types.record(value, TypeId{});
-            return TypeId{};
-
         default:
             m_types.record(value, TypeId{});
             return TypeId{};
@@ -546,7 +454,6 @@ namespace lucid::sema
         }
         default:
             // The object is not a resource or enum at module scope.
-            // Composite outputs and imports are handled in later steps.
             m_types.record(value, TypeId{});
             return TypeId{};
         }
@@ -571,17 +478,6 @@ namespace lucid::sema
         }
 
         const BaseAST *target = m_resolutions.lookup(node->type);
-
-        // If the resolution points at a composite, the node expression
-        // is a composite use. Composite uses are typed by their output
-        // in Step 7.6; here we record a placeholder.
-        if (target != nullptr && target->kind == ASTKind::CompositeDecl)
-        {
-            // The composite's use in a value context is handled in
-            // Step 7.6. Record invalid for now.
-            m_types.record(node, TypeId{});
-            return TypeId{};
-        }
 
         // Otherwise, the type name should resolve to a node type in
         // the registry.

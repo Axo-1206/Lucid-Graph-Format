@@ -7,6 +7,7 @@
 #include "core/ast/DeclAST.hpp"
 #include "core/ast/ValueAST.hpp"
 #include "core/diagnostics/DiagCode.hpp"
+#include "core/memory/StringPool.hpp"
 
 #include <string_view>
 
@@ -79,10 +80,7 @@ namespace lucid::sema
 
         /// True if the given `on` target is a valid trigger source.
         ///
-        /// Two cases succeed at module level:
-        ///   - A bare identifier that resolves to a trigger node.
-        ///   - A field access whose object resolves to a composite
-        ///     declaration (the specific output is validated in Step 7.6).
+        /// succeed at module level: A bare identifier that resolves to a trigger node.
         ///
         /// All other cases fail.
         bool isTriggerSource(const BaseAST *target) const;

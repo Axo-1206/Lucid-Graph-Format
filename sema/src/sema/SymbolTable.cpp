@@ -12,15 +12,12 @@ namespace lucid::sema
 
     bool SymbolTable::add(InternedString name,
                           SymbolKind kind,
-                          BaseAST *decl,
+                          DeclAST *decl,
                           lucid::diag::DiagnosticEngine &diag)
     {
-        // ─── Duplicate check ───────────────────────────────────────────────
         const Symbol *existing = find(name);
         if (existing != nullptr)
         {
-            // Report the collision. The message names both the
-            // colliding declaration and the kind of the existing one.
             diag.error(lucid::diag::DiagCode::Name_Redeclaration, decl,
                        "redeclaration of '",
                        diag.stringPool()
@@ -31,7 +28,6 @@ namespace lucid::sema
             return false;
         }
 
-        // ─── Add ───────────────────────────────────────────────────────────
         m_symbols.push_back(Symbol{name, kind, decl});
         return true;
     }
