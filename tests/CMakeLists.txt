@@ -168,6 +168,9 @@ add_executable(test_sema
     sema/test_symbol_collector.cpp
     sema/test_resolution_map.cpp
     sema/test_resolver.cpp
+    sema/test_primitives.cpp
+    sema/test_type_map.cpp
+    sema/test_type_checker.cpp
 )
 
 target_link_libraries(test_sema PRIVATE

@@ -3,15 +3,14 @@
 /// @brief Implementation of Sema's public entry points.
 ///
 /// ─── Current state ────────────────────────────────────────────────────────
-/// `compileModule` runs Pass 1 (symbol collection) and Pass 2 (name
-/// resolution), then stops, reporting an Internal_NotImplemented
-/// diagnostic for the remaining passes.
-///
-/// `compile` lexes, parses, and delegates to `compileModule`.
+/// `compileModule` runs Passes 1–3 (symbol collection, name
+/// resolution, type checking), then stops, reporting an
+/// Internal_NotImplemented diagnostic for the remaining passes.
 
 #include "sema/Sema.hpp"
 #include "Resolver.hpp"
 #include "SymbolCollector.hpp"
+#include "TypeChecker.hpp"
 
 #include "core/diagnostics/DiagCode.hpp"
 #include "core/memory/ASTArena.hpp"
@@ -36,17 +35,13 @@ namespace lucid::sema
                                 const Registry &registry,
                                 CompileOptions options)
     {
-        (void)source;   // unused until later passes need it
-        (void)filename; // unused until later passes tag diagnostics
-        (void)registry; // unused until type checking
-        (void)options;  // unused until import loading
+        (void)source;
+        (void)filename;
+        (void)options;
 
         CompileResult result;
-
         if (module == nullptr)
-        {
             return result;
-        }
 
         DiagnosticEngine diag(&pool);
 
@@ -58,7 +53,11 @@ namespace lucid::sema
         ResolutionMap resolutions;
         resolveNames(module, symbols, resolutions, diag);
 
-        // ─── If Pass 1 or 2 reported errors, stop here ─────────────────────
+        // ─── Pass 3: type checking ─────────────────────────────────────────
+        TypeMap types;
+        checkTypes(module, symbols, resolutions, registry, types, diag);
+
+        // ─── Stop if any pass reported errors ──────────────────────────────
         if (diag.hasErrors())
         {
             result.ok = false;
@@ -67,10 +66,10 @@ namespace lucid::sema
             return result;
         }
 
-        // ─── Passes 3+ are not yet implemented ─────────────────────────────
+        // ─── Passes 4+ not implemented ─────────────────────────────────────
         diag.errorAt(DiagCode::Internal_NotImplemented,
                      SourceLocation{1, 1},
-                     "sema: passes after name resolution "
+                     "sema: passes after type checking "
                      "are not yet implemented");
 
         result.ok = false;
