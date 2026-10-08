@@ -3,19 +3,29 @@
 /// @brief Tests for the Lucid lexer.
 ///
 /// ─── Numeric literals and the sign rule ──────────────────────────────────
-/// The format has no operators. There is no MINUS token. A leading `-`
-/// is part of the numeric literal, not a separate token.
+/// The format has no operators. There is no MINUS token and no PLUS
+/// token. A leading `-` or `+` is part of the numeric literal, not a
+/// separate token.
 ///
 ///   -400.0   →  FLOAT_LITERAL("-400.0")
 ///   -42      →  INT_LITERAL("-42")
+///   +3.14    →  FLOAT_LITERAL("+3.14")
+///   +7       →  INT_LITERAL("+7")
 ///
-/// A `-` that is not immediately followed by a digit is a lexical error
-/// (Lex_UnknownCharacter). This includes `- 42` (space between sign and
-/// digits) and `-x` (sign before an identifier).
+/// A `-` or `+` that is not immediately followed by a digit is a lexical
+/// error (Lex_UnknownCharacter). This includes `- 42` (space between sign
+/// and digits), `+ 42`, `-x` (sign before an identifier), and `+x`.
 ///
 /// The line-comment opener `--` and the block-comment opener `/-` are
 /// matched before the number lexer, so they are never confused with a
 /// signed literal.
+///
+/// ─── The two-colon token ─────────────────────────────────────────────────
+/// The grammar uses `:` as the resource-field separator and `::` as the
+/// module qualifier. The lexer emits one COLON_COLON token for two
+/// consecutive colons, and one COLON token for a single colon. The two
+/// are distinct token types; the parser never has to look inside a token
+/// to decide which one it has.
 ///
 /// Table-driven. Each test feeds a source string to `tokenize` and checks
 /// the resulting token types and, where relevant, the interned payload of
@@ -470,23 +480,77 @@ TEST_CASE("Lexer: negative hex, binary, octal",
     REQUIRE(diag.empty());
 }
 
-TEST_CASE("Lexer: negative floats with exponents",
+TEST_CASE("Lexer: explicit plus sign on integers",
           "[parser][lexer][numbers]")
 {
     StringPool pool;
     lucid::diag::DiagnosticEngine diag;
 
-    auto toks = lex("-1.0e9 -1.5e-3 -2.0E+10", pool, diag);
+    auto toks = lex("+0 +1 +42 +1000", pool, diag);
+
+    REQUIRE(typesMatch(toks, {
+                                 TokenType::INT_LITERAL,
+                                 TokenType::INT_LITERAL,
+                                 TokenType::INT_LITERAL,
+                                 TokenType::INT_LITERAL,
+                             }));
+    REQUIRE(payload(toks, pool, 0) == "+0");
+    REQUIRE(payload(toks, pool, 1) == "+1");
+    REQUIRE(payload(toks, pool, 2) == "+42");
+    REQUIRE(payload(toks, pool, 3) == "+1000");
+    REQUIRE(diag.empty());
+}
+
+TEST_CASE("Lexer: explicit plus sign on floats",
+          "[parser][lexer][numbers]")
+{
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag;
+
+    auto toks = lex("+0.0 +1.5 +3.14159 +2.0E10", pool, diag);
 
     REQUIRE(typesMatch(toks, {
                                  TokenType::FLOAT_LITERAL,
                                  TokenType::FLOAT_LITERAL,
                                  TokenType::FLOAT_LITERAL,
+                                 TokenType::FLOAT_LITERAL,
                              }));
-    REQUIRE(payload(toks, pool, 0) == "-1.0e9");
-    REQUIRE(payload(toks, pool, 1) == "-1.5e-3");
-    REQUIRE(payload(toks, pool, 2) == "-2.0E+10");
+    REQUIRE(payload(toks, pool, 0) == "+0.0");
+    REQUIRE(payload(toks, pool, 1) == "+1.5");
+    REQUIRE(payload(toks, pool, 2) == "+3.14159");
+    REQUIRE(payload(toks, pool, 3) == "+2.0E10");
     REQUIRE(diag.empty());
+}
+
+TEST_CASE("Lexer: `+` not before a digit is an error",
+          "[parser][lexer][error]")
+{
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag;
+
+    auto toks = lex("a + b", pool, diag);
+
+    REQUIRE(typesMatch(toks, {
+                                 TokenType::IDENTIFIER,
+                                 TokenType::UNKNOWN,
+                                 TokenType::IDENTIFIER,
+                             }));
+    REQUIRE(countCode(diag, lucid::diag::DiagCode::Lex_UnknownCharacter) == 1);
+}
+
+TEST_CASE("Lexer: `+` with a space before the digit is an error",
+          "[parser][lexer][error]")
+{
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag;
+
+    auto toks = lex("+ 42", pool, diag);
+
+    REQUIRE(typesMatch(toks, {
+                                 TokenType::UNKNOWN,
+                                 TokenType::INT_LITERAL,
+                             }));
+    REQUIRE(countCode(diag, lucid::diag::DiagCode::Lex_UnknownCharacter) == 1);
 }
 
 TEST_CASE("Lexer: `-` not before a digit is an error",
@@ -687,7 +751,7 @@ TEST_CASE("Lexer: every punctuation mark", "[parser][lexer][punct]")
     StringPool pool;
     lucid::diag::DiagnosticEngine diag;
 
-    auto toks = lex("( ) { } [ ] , . : = @", pool, diag);
+    auto toks = lex("( ) { } [ ] , . : :: = @", pool, diag);
 
     REQUIRE(typesMatch(toks, {
                                  TokenType::LPAREN,
@@ -699,6 +763,7 @@ TEST_CASE("Lexer: every punctuation mark", "[parser][lexer][punct]")
                                  TokenType::COMMA,
                                  TokenType::DOT,
                                  TokenType::COLON,
+                                 TokenType::COLON_COLON,
                                  TokenType::EQUALS,
                                  TokenType::AT_SIGN,
                              }));
@@ -723,6 +788,60 @@ TEST_CASE("Lexer: punctuation without surrounding whitespace",
                                  TokenType::COMMA,
                                  TokenType::INT_LITERAL,
                                  TokenType::RPAREN,
+                             }));
+}
+
+TEST_CASE("Lexer: `::` is one token, not two colons",
+          "[parser][lexer][punct]")
+{
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag;
+
+    auto toks = lex("core::Key", pool, diag);
+
+    REQUIRE(typesMatch(toks, {
+                                 TokenType::IDENTIFIER,  // core
+                                 TokenType::COLON_COLON, // ::
+                                 TokenType::IDENTIFIER,  // Key
+                             }));
+    REQUIRE(payload(toks, pool, 1) == "::");
+    REQUIRE(diag.empty());
+}
+
+TEST_CASE("Lexer: single `:` is COLON, not COLON_COLON",
+          "[parser][lexer][punct]")
+{
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag;
+
+    auto toks = lex("a : b", pool, diag);
+
+    REQUIRE(typesMatch(toks, {
+                                 TokenType::IDENTIFIER,
+                                 TokenType::COLON,
+                                 TokenType::IDENTIFIER,
+                             }));
+    REQUIRE(payload(toks, pool, 1) == ":");
+    REQUIRE(diag.empty());
+}
+
+TEST_CASE("Lexer: `:::` lexes as COLON_COLON then COLON",
+          "[parser][lexer][punct]")
+{
+    // Three colons: the lexer consumes two for COLON_COLON, then one
+    // for COLON. A reader might expect the lexer to produce COLON,
+    // COLON_COLON or COLON_COLON, COLON; the rule is left-to-right,
+    // so it is COLON_COLON then COLON.
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag;
+
+    auto toks = lex("a:::b", pool, diag);
+
+    REQUIRE(typesMatch(toks, {
+                                 TokenType::IDENTIFIER,
+                                 TokenType::COLON_COLON,
+                                 TokenType::COLON,
+                                 TokenType::IDENTIFIER,
                              }));
 }
 
@@ -814,19 +933,24 @@ TEST_CASE("Lexer: unterminated block comment is an error",
 
 // ─── Comment precedence over the sign ─────────────────────────────────────
 
-TEST_CASE("Lexer: `--` starts a line comment, not a negative number",
+TEST_CASE("Lexer: `++` is not a comment and not a sign",
           "[parser][lexer][comments]")
 {
+    // `++` has no meaning in this language. Neither `+` is followed by
+    // a digit, so neither is a sign, and `++` is not a comment opener.
+    // The lexer reports two unknown characters.
     StringPool pool;
     lucid::diag::DiagnosticEngine diag;
 
-    auto toks = lex("a --5\nb", pool, diag);
+    auto toks = lex("a ++ b", pool, diag);
 
     REQUIRE(typesMatch(toks, {
                                  TokenType::IDENTIFIER,
+                                 TokenType::UNKNOWN,
+                                 TokenType::UNKNOWN,
                                  TokenType::IDENTIFIER,
                              }));
-    REQUIRE(diag.empty());
+    REQUIRE(countCode(diag, lucid::diag::DiagCode::Lex_UnknownCharacter) == 2);
 }
 
 TEST_CASE("Lexer: `/-` starts a block comment, not a negative number",
@@ -938,15 +1062,15 @@ TEST_CASE("Lexer: location of an unterminated string points at the quote",
     REQUIRE(d.location.column() == 10);
 }
 
-TEST_CASE("Lexer: location of a negative number starts at the sign",
+TEST_CASE("Lexer: location of a positive signed number starts at the sign",
           "[parser][lexer][location]")
 {
     StringPool pool;
     lucid::diag::DiagnosticEngine diag;
 
-    auto toks = lex("x = -42", pool, diag);
+    auto toks = lex("x = +42", pool, diag);
 
-    // `-42` starts at column 5.
+    // `+42` starts at column 5.
     REQUIRE(toks[2].type == TokenType::INT_LITERAL);
     REQUIRE(toks[2].location.column() == 5);
 }

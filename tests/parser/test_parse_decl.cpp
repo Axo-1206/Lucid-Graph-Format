@@ -98,20 +98,21 @@ TEST_CASE("parseImportDecl parses a dotted import path", "[parse-decl]")
                                 });
     REQUIRE(node != nullptr);
     CHECK(f.pool.lookupView(node->path) == std::string_view{"core.keys"});
+    // The module name is the final path segment; there is no `as` clause.
     CHECK(f.pool.lookupView(node->name) == std::string_view{"keys"});
 }
 
-TEST_CASE("parseImportDecl parses an explicit alias", "[parse-decl]")
+TEST_CASE("parseImportDecl parses a three-segment path", "[parse-decl]")
 {
     Fixture f;
-    ImportDeclAST *node = f.run("import core.keys as k",
+    ImportDeclAST *node = f.run("import a.b.c",
                                 [](TokenStream &s, ParserContext &c)
                                 {
                                     return parseImportDecl(s, c);
                                 });
     REQUIRE(node != nullptr);
-    CHECK(f.pool.lookupView(node->path) == std::string_view{"core.keys"});
-    CHECK(f.pool.lookupView(node->name) == std::string_view{"k"});
+    CHECK(f.pool.lookupView(node->path) == std::string_view{"a.b.c"});
+    CHECK(f.pool.lookupView(node->name) == std::string_view{"c"});
 }
 
 TEST_CASE("parseImportDecl reports a missing path", "[parse-decl]")
@@ -125,21 +126,6 @@ TEST_CASE("parseImportDecl reports a missing path", "[parse-decl]")
     CHECK(node == nullptr);
     CHECK(f.diag.hasErrors());
     CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedModulePath);
-}
-
-TEST_CASE("parseImportDecl reports a missing alias after 'as'", "[parse-decl]")
-{
-    Fixture f;
-    ImportDeclAST *node = f.run("import keys as",
-                                [](TokenStream &s, ParserContext &c)
-                                {
-                                    return parseImportDecl(s, c);
-                                });
-    REQUIRE(node != nullptr);
-    CHECK(f.diag.hasErrors());
-    CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedImportAlias);
-    // The alias falls back to the last path segment.
-    CHECK(f.pool.lookupView(node->name) == std::string_view{"keys"});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -258,7 +244,11 @@ TEST_CASE("parseResourceDecl parses a resource with fields", "[parse-decl]")
     REQUIRE(speed->type != nullptr);
     CHECK(f.pool.lookupView(speed->type->name) == std::string_view{"float"});
     REQUIRE(speed->hasDefault());
-    CHECK(speed->defaultValue->kind == LiteralKind::Float);
+    // defaultValue is a BaseAST*; the node kind is LiteralValue, and the
+    // literal's kind is a separate field inside LiteralValueAST.
+    REQUIRE(speed->defaultValue->isa<LiteralValueAST>());
+    CHECK(speed->defaultValue->as<LiteralValueAST>()->kind ==
+          LiteralKind::Float);
 
     ResourceFieldAST *hp = node->fields[1];
     REQUIRE(hp != nullptr);
@@ -291,13 +281,15 @@ TEST_CASE("parseResourceField parses a field with a default", "[parse-decl]")
     REQUIRE(node != nullptr);
     CHECK_FALSE(node->hasSyntaxError);
     REQUIRE(node->hasDefault());
-    CHECK(node->defaultValue->kind == LiteralKind::Int);
+    REQUIRE(node->defaultValue->isa<LiteralValueAST>());
+    CHECK(node->defaultValue->as<LiteralValueAST>()->kind ==
+          LiteralKind::Int);
 }
 
 TEST_CASE("parseResourceField parses a qualified field type", "[parse-decl]")
 {
     Fixture f;
-    ResourceFieldAST *node = f.run("key: core.Key",
+    ResourceFieldAST *node = f.run("key: core::Key",
                                    [](TokenStream &s, ParserContext &c)
                                    {
                                        return parseResourceField(s, c);
@@ -305,6 +297,26 @@ TEST_CASE("parseResourceField parses a qualified field type", "[parse-decl]")
     REQUIRE(node != nullptr);
     REQUIRE(node->type != nullptr);
     CHECK(node->type->isQualified());
+    CHECK(f.pool.lookupView(node->type->qualifier) ==
+          std::string_view{"core"});
+    CHECK(f.pool.lookupView(node->type->name) == std::string_view{"Key"});
+}
+
+TEST_CASE("parseResourceField parses an enum member default",
+          "[parse-decl]")
+{
+    Fixture f;
+    ResourceFieldAST *node =
+        f.run("key: Key = Key.A",
+              [](TokenStream &s, ParserContext &c)
+              {
+                  return parseResourceField(s, c);
+              });
+    REQUIRE(node != nullptr);
+    CHECK_FALSE(node->hasSyntaxError);
+    REQUIRE(node->hasDefault());
+    REQUIRE(node->defaultValue != nullptr);
+    CHECK(node->defaultValue->isa<FieldAccessValueAST>());
 }
 
 TEST_CASE("parseResourceField reports a missing type", "[parse-decl]")
@@ -377,6 +389,25 @@ TEST_CASE("parseNodeDecl parses multiple triggers", "[parse-decl]")
           std::string_view{"on_other"});
 }
 
+TEST_CASE("parseNodeDecl parses a qualified node type", "[parse-decl]")
+{
+    Fixture f;
+    NodeDeclAST *node = f.run("node h = physics::Body(player)",
+                              [](TokenStream &s, ParserContext &c)
+                              {
+                                  return parseNodeDecl(s, c);
+                              });
+    REQUIRE(node != nullptr);
+    CHECK_FALSE(node->hasSyntaxError);
+    REQUIRE(node->expr != nullptr);
+    REQUIRE(node->expr->type != nullptr);
+    CHECK(node->expr->type->isQualified());
+    CHECK(f.pool.lookupView(node->expr->type->qualifier) ==
+          std::string_view{"physics"});
+    CHECK(f.pool.lookupView(node->expr->type->name) ==
+          std::string_view{"Body"});
+}
+
 TEST_CASE("parseNodeDecl reports a missing name", "[parse-decl]")
 {
     Fixture f;
@@ -446,16 +477,18 @@ TEST_CASE("parseAttributeList parses a single attribute", "[parse-decl]")
 
 TEST_CASE("parseAttributeList parses multiple attributes", "[parse-decl]")
 {
+    // The parser accepts any @name; the set of recognized attributes is a
+    // Sema concern. This test uses a second attribute name to exercise the
+    // "more than one attribute" path.
     Fixture f;
-    auto span = f.run("@export @deprecated resource X { }",
+    auto span = f.run("@export @custom resource X { }",
                       [](TokenStream &s, ParserContext &c)
                       {
                           return parseAttributeList(s, c);
                       });
     REQUIRE(span.size() == 2);
     CHECK(f.pool.lookupView(span[0]->name) == std::string_view{"export"});
-    CHECK(f.pool.lookupView(span[1]->name) ==
-          std::string_view{"deprecated"});
+    CHECK(f.pool.lookupView(span[1]->name) == std::string_view{"custom"});
 }
 
 TEST_CASE("parseAttribute reports a missing name", "[parse-decl]")

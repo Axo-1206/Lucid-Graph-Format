@@ -291,7 +291,7 @@ TEST_CASE("parseValue parses an inline node with a qualified type",
           "[parse-value]")
 {
     Fixture f;
-    BaseAST *node = f.runValue("health.Health(100)");
+    BaseAST *node = f.runValue("health::Health(100)");
     REQUIRE(node != nullptr);
     REQUIRE(node->isa<InlineNodeValueAST>());
     auto *inl = node->as<InlineNodeValueAST>();
@@ -389,9 +389,9 @@ TEST_CASE("parseValue distinguishes a qualified inline node from a field access"
     CHECK(fa->isa<FieldAccessValueAST>());
     CHECK_FALSE(fa->isa<InlineNodeValueAST>());
 
-    // `health.Health(100)` is a qualified inline node: the token after
-    // the `.` is an identifier, and the token after *that* is `(`.
-    BaseAST *inl = f.runValue("health.Health(100)");
+    // `health::Health(100)` is a qualified inline node: the token after
+    // the `::` is an identifier, and the token after *that* is `(`.
+    BaseAST *inl = f.runValue("health::Health(100)");
     REQUIRE(inl != nullptr);
     CHECK(inl->isa<InlineNodeValueAST>());
     CHECK_FALSE(inl->isa<FieldAccessValueAST>());

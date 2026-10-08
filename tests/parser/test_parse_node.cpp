@@ -124,7 +124,7 @@ TEST_CASE("parseNodeExpr parses a qualified node type",
           "[parse-node]")
 {
     Fixture f;
-    NodeExprAST *node = f.runNodeExpr("health.Health(100)");
+    NodeExprAST *node = f.runNodeExpr("health::Health(100)");
     REQUIRE(node != nullptr);
     CHECK_FALSE(node->hasSyntaxError);
     REQUIRE(node->type != nullptr);

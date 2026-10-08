@@ -5,7 +5,9 @@
 /// ─── Test shape ───────────────────────────────────────────────────────────
 /// Each test parses a small source string and dumps the resulting
 /// ModuleAST, then compares the dump against the expected JSON. The
-/// comparison is exact string comparison.
+/// comparison is exact string comparison where the whole output is
+/// predictable, and a substring search where only a fragment of the
+/// output matters.
 ///
 /// The parser is exercised by every test; the dumper is the code under
 /// test. The parser's own correctness is covered elsewhere.
@@ -73,7 +75,7 @@ TEST_CASE("dumpModule dumps an empty module", "[json-dumper]")
 // Imports
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("dumpModule dumps an import", "[json-dumper]")
+TEST_CASE("dumpModule dumps a simple import", "[json-dumper]")
 {
     Fixture f;
     const std::string json = f.dump("import keys");
@@ -82,12 +84,21 @@ TEST_CASE("dumpModule dumps an import", "[json-dumper]")
     CHECK(json.find(R"("path":"keys")") != std::string::npos);
 }
 
-TEST_CASE("dumpModule dumps an aliased import", "[json-dumper]")
+TEST_CASE("dumpModule dumps a dotted import", "[json-dumper]")
+{
+    // The module name is the final path segment; there is no `as` clause.
+    Fixture f;
+    const std::string json = f.dump("import core.keys");
+    CHECK(json.find(R"("path":"core.keys")") != std::string::npos);
+    CHECK(json.find(R"("name":"keys")") != std::string::npos);
+}
+
+TEST_CASE("dumpModule dumps a three-segment import path", "[json-dumper]")
 {
     Fixture f;
-    const std::string json = f.dump("import core.keys as k");
-    CHECK(json.find(R"("path":"core.keys")") != std::string::npos);
-    CHECK(json.find(R"("name":"k")") != std::string::npos);
+    const std::string json = f.dump("import a.b.c");
+    CHECK(json.find(R"("path":"a.b.c")") != std::string::npos);
+    CHECK(json.find(R"("name":"c")") != std::string::npos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,13 +158,35 @@ TEST_CASE("dumpModule dumps a resource field with a default",
     CHECK(json.find(R"("text":"100")") != std::string::npos);
 }
 
+TEST_CASE("dumpModule dumps a resource field with an enum member default",
+          "[json-dumper]")
+{
+    // `key_left: Key = Key.A` — the default is a value, not a literal.
+    Fixture f;
+    const std::string json = f.dump("resource R { key_left: Key = Key.A }");
+    CHECK(json.find(R"("name":"key_left")") != std::string::npos);
+    CHECK(json.find(R"("kind":"FieldAccessValue")") != std::string::npos);
+    CHECK(json.find(R"("object":"Key")") != std::string::npos);
+    CHECK(json.find(R"("field":"A")") != std::string::npos);
+}
+
 TEST_CASE("dumpModule dumps a qualified resource field type",
           "[json-dumper]")
 {
     Fixture f;
-    const std::string json = f.dump("resource R { key: core.Key }");
+    const std::string json = f.dump("resource R { key: core::Key }");
     CHECK(json.find(R"("qualifier":"core")") != std::string::npos);
     CHECK(json.find(R"("name":"Key")") != std::string::npos);
+}
+
+TEST_CASE("dumpModule dumps an unqualified type with a null qualifier",
+          "[json-dumper]")
+{
+    // The separator does not appear in the JSON; an unqualified type
+    // has a null `qualifier`.
+    Fixture f;
+    const std::string json = f.dump("resource R { hp: int }");
+    CHECK(json.find(R"("qualifier":null)") != std::string::npos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +233,14 @@ TEST_CASE("dumpModule dumps a node with multiple triggers",
           std::string::npos);
 }
 
+TEST_CASE("dumpModule dumps a qualified node type", "[json-dumper]")
+{
+    Fixture f;
+    const std::string json = f.dump("node h = physics::Body(player)");
+    CHECK(json.find(R"("qualifier":"physics")") != std::string::npos);
+    CHECK(json.find(R"("name":"Body")") != std::string::npos);
+}
+
 TEST_CASE("dumpModule dumps an inline node argument", "[json-dumper]")
 {
     Fixture f;
@@ -208,6 +249,18 @@ TEST_CASE("dumpModule dumps an inline node argument", "[json-dumper]")
     // a NodeExpr for Bar.
     CHECK(json.find(R"("kind":"InlineNodeValue")") != std::string::npos);
     CHECK(json.find(R"("kind":"NodeExpr")") != std::string::npos);
+}
+
+TEST_CASE("dumpModule dumps a qualified inline node argument",
+          "[json-dumper]")
+{
+    // `health::Health(100)` as an argument: the inline node's type has
+    // a qualifier.
+    Fixture f;
+    const std::string json = f.dump("node a = Foo(health::Health(100))");
+    CHECK(json.find(R"("kind":"InlineNodeValue")") != std::string::npos);
+    CHECK(json.find(R"("qualifier":"health")") != std::string::npos);
+    CHECK(json.find(R"("name":"Health")") != std::string::npos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -220,6 +273,17 @@ TEST_CASE("dumpModule dumps an attribute", "[json-dumper]")
     const std::string json = f.dump("@export resource R { }");
     CHECK(json.find(R"("kind":"Attribute")") != std::string::npos);
     CHECK(json.find(R"("name":"export")") != std::string::npos);
+}
+
+TEST_CASE("dumpModule dumps an attribute on a node", "[json-dumper]")
+{
+    // The grammar allows an attribute list on any of the four top-level
+    // declarations. Sema rejects `@export` on a node, but the parser and
+    // the dumper accept it.
+    Fixture f;
+    const std::string json = f.dump("@export node a = Foo()");
+    CHECK(json.find(R"("kind":"Attribute")") != std::string::npos);
+    CHECK(json.find(R"("kind":"NodeDecl")") != std::string::npos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

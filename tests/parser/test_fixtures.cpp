@@ -29,6 +29,23 @@
 ///     missing-name.expected (hand-written, one DiagCode per line)
 ///     ...
 ///
+/// ─── Fixture content and the grammar ──────────────────────────────────────
+/// The fixture sources are part of the repository. When the grammar
+/// changes, some of them may need updating by hand. Two changes matter
+/// at the moment:
+///
+///   - There is no `as` clause on imports. A fixture that writes
+///     `import a.b as c` is now a syntax error; remove the `as c`.
+///
+///   - A qualified type or node type uses `::`, not `.`. A fixture that
+///     writes `core.Key` or `health.Health(...)` should write
+///     `core::Key` or `health::Health(...)`.
+///
+/// The `.expected` files that list diagnostic codes may also need
+/// updating: `Syntax_ExpectedImportAlias` no longer exists, and a
+/// qualified-type separator change can shift which diagnostic is
+/// reported.
+///
 /// ─── Regeneration ─────────────────────────────────────────────────────────
 /// When the parser or the dumper changes, the good/*.json files may need
 /// to be regenerated. Run:
@@ -116,6 +133,13 @@ namespace
 
     // Map a DiagCode to its enumerator name. The test's .expected files
     // use the enumerator names, not the numeric codes.
+    //
+    // The switch is not exhaustive on purpose. A code that is not listed
+    // here renders as "Other" in the .expected comparison. That is the
+    // right behavior: a fixture's .expected file lists the codes it
+    // cares about, and an unlisted code shows up as a mismatch with the
+    // name "Other", which tells the reader to add the code here if the
+    // fixture is meant to check it.
     std::string codeToString(DiagCode code)
     {
         switch (code)
@@ -136,8 +160,6 @@ namespace
             return "Syntax_IncompleteDeclaration";
         case DiagCode::Syntax_ExpectedModulePath:
             return "Syntax_ExpectedModulePath";
-        case DiagCode::Syntax_ExpectedImportAlias:
-            return "Syntax_ExpectedImportAlias";
         case DiagCode::Syntax_ExpectedEnumName:
             return "Syntax_ExpectedEnumName";
         case DiagCode::Syntax_ExpectedEnumBody:
@@ -300,10 +322,10 @@ TEST_CASE("fixtures/bad: parse produces the expected diagnostic codes",
         REQUIRE_FALSE(expected.empty());
 
         INFO("actual codes:   " << [&]
-             { 
+             {
             std::string s; for (auto& c : actual) { s += c; s += ' '; } return s; }());
         INFO("expected codes: " << [&]
-             { 
+             {
             std::string s; for (auto& c : expected) { s += c; s += ' '; } return s; }());
 
         CHECK(actual == expected);

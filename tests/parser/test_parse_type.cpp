@@ -99,7 +99,7 @@ TEST_CASE("parseTypeId parses a qualified type name",
           "[parse-type]")
 {
     Fixture f;
-    TypeIdAST *node = f.run("core.Key");
+    TypeIdAST *node = f.run("core::Key");
 
     REQUIRE(node != nullptr);
     CHECK_FALSE(node->hasSyntaxError);
@@ -113,7 +113,7 @@ TEST_CASE("parseTypeId records the location of the first identifier",
           "[parse-type]")
 {
     Fixture f;
-    TypeIdAST *node = f.run("core.Key");
+    TypeIdAST *node = f.run("core::Key");
 
     REQUIRE(node != nullptr);
     CHECK(node->loc.isKnown());
@@ -154,11 +154,11 @@ TEST_CASE("parseTypeId reports when the current token is not an identifier",
     CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedIdentifier);
 }
 
-TEST_CASE("parseTypeId reports a dot with no identifier after it",
+TEST_CASE("parseTypeId reports a `::` with no identifier after it",
           "[parse-type]")
 {
     Fixture f;
-    TypeIdAST *node = f.run("core.");
+    TypeIdAST *node = f.run("core::");
 
     REQUIRE(node != nullptr);
     CHECK(node->hasSyntaxError);
@@ -167,29 +167,29 @@ TEST_CASE("parseTypeId reports a dot with no identifier after it",
     CHECK(f.pool.lookupView(node->qualifier) == std::string_view{"core"});
     CHECK_FALSE(node->name.isValid());
     CHECK(f.diag.hasErrors());
-    CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedFieldAccess);
+    CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedIdentifier);
 }
 
-TEST_CASE("parseTypeId reports a dot followed by a non-identifier",
+TEST_CASE("parseTypeId reports a `::` followed by a non-identifier",
           "[parse-type]")
 {
     Fixture f;
-    TypeIdAST *node = f.run("core.42");
+    TypeIdAST *node = f.run("core::42");
 
     REQUIRE(node != nullptr);
     CHECK(node->hasSyntaxError);
     CHECK(node->isQualified());
     CHECK_FALSE(node->name.isValid());
     CHECK(f.diag.hasErrors());
-    CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedFieldAccess);
+    CHECK(f.diag.all().back().code == DiagCode::Syntax_ExpectedIdentifier);
 }
 
 TEST_CASE("parseTypeId reports a third segment as an error",
           "[parse-type]")
 {
-    // The grammar allows at most one `.`. `a.b.c` is a syntax error.
+    // The grammar allows at most one `::`. `a::b::c` is a syntax error.
     Fixture f;
-    TypeIdAST *node = f.run("a.b.c");
+    TypeIdAST *node = f.run("a::b::c");
 
     REQUIRE(node != nullptr);
     CHECK(node->hasSyntaxError);
@@ -220,9 +220,9 @@ TEST_CASE("parseTypeId consumes exactly the identifier on an unqualified name",
 TEST_CASE("parseTypeId consumes exactly three tokens on a qualified name",
           "[parse-type]")
 {
-    // After parseTypeId on `core.Key`, the next token should be EOF.
+    // After parseTypeId on `core::Key`, the next token should be EOF.
     Fixture f;
-    TokenStream stream(f.lex("core.Key"));
+    TokenStream stream(f.lex("core::Key"));
     ParserContext ctx(f.pool, f.arena, f.diag, stream);
 
     TypeIdAST *node = parseTypeId(stream, ctx);
@@ -230,13 +230,13 @@ TEST_CASE("parseTypeId consumes exactly three tokens on a qualified name",
     CHECK(stream.isAtEnd());
 }
 
-TEST_CASE("parseTypeId consumes the dot but stops before the bad token",
+TEST_CASE("parseTypeId consumes the `::` but stops before the bad token",
           "[parse-type]")
 {
-    // On `core.42`, parseTypeId consumes `core` and `.`, but not `42`.
+    // On `core::42`, parseTypeId consumes `core` and `::`, but not `42`.
     // The caller's recovery sees `42`.
     Fixture f;
-    TokenStream stream(f.lex("core.42"));
+    TokenStream stream(f.lex("core::42"));
     ParserContext ctx(f.pool, f.arena, f.diag, stream);
 
     TypeIdAST *node = parseTypeId(stream, ctx);
@@ -244,16 +244,16 @@ TEST_CASE("parseTypeId consumes the dot but stops before the bad token",
     CHECK(stream.peekType() == TokenType::INT_LITERAL);
 }
 
-TEST_CASE("parseTypeId does not consume the second dot in a third segment",
+TEST_CASE("parseTypeId does not consume the second `::` in a third segment",
           "[parse-type]")
 {
-    // On `a.b.c`, parseTypeId consumes `a`, `.`, `b`, and stops before the
-    // second `.`. The caller's recovery sees the second `.`.
+    // On `a::b::c`, parseTypeId consumes `a`, `::`, `b`, and stops before
+    // the second `::`. The caller's recovery sees the second `::`.
     Fixture f;
-    TokenStream stream(f.lex("a.b.c"));
+    TokenStream stream(f.lex("a::b::c"));
     ParserContext ctx(f.pool, f.arena, f.diag, stream);
 
     TypeIdAST *node = parseTypeId(stream, ctx);
     REQUIRE(node != nullptr);
-    CHECK(stream.peekType() == TokenType::DOT);
+    CHECK(stream.peekType() == TokenType::COLON_COLON);
 }

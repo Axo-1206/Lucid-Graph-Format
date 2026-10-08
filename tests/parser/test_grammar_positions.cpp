@@ -88,6 +88,8 @@ namespace
             return false;
         case TokenType::COLON:
             return false;
+        case TokenType::COLON_COLON:
+            return false;
         case TokenType::EQUALS:
             return false;
         case TokenType::AT_SIGN:
@@ -148,6 +150,8 @@ namespace
             return false;
         case TokenType::COLON:
             return false;
+        case TokenType::COLON_COLON:
+            return false;
         case TokenType::EQUALS:
             return false;
         case TokenType::AT_SIGN:
@@ -207,6 +211,8 @@ namespace
         case TokenType::DOT:
             return false;
         case TokenType::COLON:
+            return false;
+        case TokenType::COLON_COLON:
             return false;
         case TokenType::EQUALS:
             return false;
@@ -304,4 +310,29 @@ TEST_CASE("EOF_TOKEN begins nothing",
     CHECK_FALSE(canStartTopDecl(TokenType::EOF_TOKEN));
     CHECK_FALSE(canStartValue(TokenType::EOF_TOKEN));
     CHECK_FALSE(canStartType(TokenType::EOF_TOKEN));
+}
+
+TEST_CASE("COLON and COLON_COLON begin nothing",
+          "[grammar-positions]")
+{
+    // The field separator and the module qualifier are never the first
+    // token of a declaration, a value, or a type. A type starts with an
+    // identifier; the qualifier is optional and appears after it.
+    CHECK_FALSE(canStartTopDecl(TokenType::COLON));
+    CHECK_FALSE(canStartValue(TokenType::COLON));
+    CHECK_FALSE(canStartType(TokenType::COLON));
+
+    CHECK_FALSE(canStartTopDecl(TokenType::COLON_COLON));
+    CHECK_FALSE(canStartValue(TokenType::COLON_COLON));
+    CHECK_FALSE(canStartType(TokenType::COLON_COLON));
+}
+
+TEST_CASE("AT_SIGN begins a top-level declaration only",
+          "[grammar-positions]")
+{
+    // An attribute list may precede any of the four top-level
+    // declarations. It does not begin a value or a type.
+    CHECK(canStartTopDecl(TokenType::AT_SIGN));
+    CHECK_FALSE(canStartValue(TokenType::AT_SIGN));
+    CHECK_FALSE(canStartType(TokenType::AT_SIGN));
 }
