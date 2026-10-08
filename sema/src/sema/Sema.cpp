@@ -1,19 +1,16 @@
 /// @file sema/src/sema/Sema.cpp
 ///
-/// @brief Implementation of Sema's public entry points. STUB for Pass 1.
+/// @brief Implementation of Sema's public entry points.
 ///
 /// ─── Current state ────────────────────────────────────────────────────────
-/// `compileModule` runs Pass 1 (symbol collection) and then stops,
-/// reporting an Internal_NotImplemented diagnostic that says the
-/// remaining passes are not yet implemented.
+/// `compileModule` runs Pass 1 (symbol collection) and Pass 2 (name
+/// resolution), then stops, reporting an Internal_NotImplemented
+/// diagnostic for the remaining passes.
 ///
 /// `compile` lexes, parses, and delegates to `compileModule`.
-///
-/// Step 7.3 replaces the "stop after Pass 1" behavior with the resolver
-/// walk. Step 7.4 adds type checking, and so on. Each step adds a pass
-/// and removes the "not implemented" diagnostic.
 
 #include "sema/Sema.hpp"
+#include "Resolver.hpp"
 #include "SymbolCollector.hpp"
 
 #include "core/diagnostics/DiagCode.hpp"
@@ -51,17 +48,29 @@ namespace lucid::sema
             return result;
         }
 
-        // ─── A diagnostic engine for this compile ─────────────────────────
         DiagnosticEngine diag(&pool);
 
         // ─── Pass 1: symbol collection ─────────────────────────────────────
         SymbolTable symbols;
         collectSymbols(module, symbols, diag);
 
-        // ─── Passes 2+ are not yet implemented ─────────────────────────────
+        // ─── Pass 2: name resolution ───────────────────────────────────────
+        ResolutionMap resolutions;
+        resolveNames(module, symbols, resolutions, diag);
+
+        // ─── If Pass 1 or 2 reported errors, stop here ─────────────────────
+        if (diag.hasErrors())
+        {
+            result.ok = false;
+            result.graph = nullptr;
+            result.diagnostics = diag.all();
+            return result;
+        }
+
+        // ─── Passes 3+ are not yet implemented ─────────────────────────────
         diag.errorAt(DiagCode::Internal_NotImplemented,
                      SourceLocation{1, 1},
-                     "sema: passes after symbol collection "
+                     "sema: passes after name resolution "
                      "are not yet implemented");
 
         result.ok = false;

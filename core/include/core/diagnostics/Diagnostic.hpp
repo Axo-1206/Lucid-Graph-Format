@@ -126,7 +126,7 @@ namespace lucid::diag
         // ─── Report: AST-anchored ───────────────────────────────────────────
 
         template <typename... Args>
-        void error(DiagCode code, BaseAST *node, Args &&...args)
+        void error(DiagCode code, const BaseAST *node, Args &&...args)
         {
             add(severityFromCode(code), code,
                 node ? locationOf(node) : SourceLocation{},
@@ -134,7 +134,7 @@ namespace lucid::diag
         }
 
         template <typename... Args>
-        void warning(DiagCode code, BaseAST *node, Args &&...args)
+        void warning(DiagCode code, const BaseAST *node, Args &&...args)
         {
             add(Severity::Warning, code,
                 node ? locationOf(node) : SourceLocation{},
@@ -142,7 +142,7 @@ namespace lucid::diag
         }
 
         template <typename... Args>
-        void note(BaseAST *node, Args &&...args)
+        void note(const BaseAST *node, Args &&...args)
         {
             add(Severity::Note, DiagCode(0),
                 node ? locationOf(node) : SourceLocation{},
@@ -150,7 +150,7 @@ namespace lucid::diag
         }
 
         template <typename... Args>
-        void hint(BaseAST *node, Args &&...args)
+        void hint(const BaseAST *node, Args &&...args)
         {
             add(Severity::Hint, DiagCode(0),
                 node ? locationOf(node) : SourceLocation{},

@@ -166,6 +166,8 @@ add_executable(test_sema
     sema/test_sema_smoke.cpp
     sema/test_symbol_table.cpp
     sema/test_symbol_collector.cpp
+    sema/test_resolution_map.cpp
+    sema/test_resolver.cpp
 )
 
 target_link_libraries(test_sema PRIVATE
