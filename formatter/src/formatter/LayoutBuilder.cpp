@@ -306,17 +306,6 @@ namespace lucid::formatter
         m_writer.write("import ");
         m_writer.write(lookup(node->path));
 
-        const std::string_view path = lookup(node->path);
-        const size_t lastDot = path.rfind('.');
-        const std::string_view lastSegment =
-            lastDot == std::string_view::npos ? path : path.substr(lastDot + 1);
-
-        if (lookup(node->name) != lastSegment)
-        {
-            m_writer.write(" as ");
-            m_writer.write(lookup(node->name));
-        }
-
         drainTrailingComments(node->loc.line());
         m_writer.newline();
     }
@@ -339,7 +328,11 @@ namespace lucid::formatter
             drainCommentsBefore(member->loc);
 
             m_writer.write(lookup(member->name));
-            m_writer.write(','); // the comma your fix added
+            // Every member, including the last, gets a comma. The grammar
+            // allows a trailing comma, and a symmetric layout is easier to
+            // diff: adding or removing a member never touches the previous
+            // member's line.
+            m_writer.write(',');
 
             drainTrailingComments(member->loc.line());
             m_writer.newline();
@@ -387,7 +380,7 @@ namespace lucid::formatter
         if (node->defaultValue)
         {
             m_writer.write(" = ");
-            writeLiteralValue(node->defaultValue);
+            writeValue(node->defaultValue);
         }
 
         drainTrailingComments(node->loc.line());
@@ -433,7 +426,7 @@ namespace lucid::formatter
         if (node->isQualified())
         {
             m_writer.write(lookup(node->qualifier));
-            m_writer.write('.');
+            m_writer.write("::");
         }
         m_writer.write(lookup(node->name));
     }
