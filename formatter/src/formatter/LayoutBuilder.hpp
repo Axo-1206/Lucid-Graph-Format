@@ -14,7 +14,7 @@
 ///
 /// ─── Layout: Policy A ─────────────────────────────────────────────────────
 /// Every construct is emitted on a single line, except for the ones
-/// whose grammar mandates a block: enums, resources, composites. Node
+/// whose grammar mandates a block: enums, resources. Node
 /// expressions and their argument lists always stay on one line,
 /// regardless of length. There is no line-length threshold and no
 /// line breaking.
@@ -84,9 +84,6 @@ namespace lucid::formatter
         void writeResourceDecl(const ResourceDeclAST *node);
         void writeResourceField(const ResourceFieldAST *node);
         void writeNodeDecl(const NodeDeclAST *node);
-        void writeCompositeDecl(const CompositeDeclAST *node);
-        void writeCompositeInput(const CompositeInputAST *node);
-        void writeCompositeOutput(const CompositeOutputAST *node);
 
         // ─── Attributes ────────────────────────────────────────────────────
 

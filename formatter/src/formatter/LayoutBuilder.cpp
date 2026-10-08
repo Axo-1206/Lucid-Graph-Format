@@ -219,9 +219,6 @@ namespace lucid::formatter
         case ASTKind::NodeDecl:
             writeNodeDecl(node->as<NodeDeclAST>());
             break;
-        case ASTKind::CompositeDecl:
-            writeCompositeDecl(node->as<CompositeDeclAST>());
-            break;
         default:
             break;
         }
@@ -279,9 +276,6 @@ namespace lucid::formatter
             break;
         case ASTKind::NodeDecl:
             writeNodeDecl(node->as<NodeDeclAST>());
-            break;
-        case ASTKind::CompositeDecl:
-            writeCompositeDecl(node->as<CompositeDeclAST>());
             break;
         default:
             break;
@@ -425,121 +419,6 @@ namespace lucid::formatter
         }
 
         drainTrailingComments(node->loc.line());
-        m_writer.newline();
-    }
-
-    void LayoutBuilder::writeCompositeInput(const CompositeInputAST *node)
-    {
-        drainCommentsBefore(node->loc);
-
-        m_writer.write(lookup(node->name));
-        m_writer.write(": ");
-        if (node->type)
-        {
-            writeTypeId(node->type);
-        }
-
-        drainTrailingComments(node->loc.line());
-        m_writer.newline();
-    }
-
-    void LayoutBuilder::writeCompositeOutput(const CompositeOutputAST *node)
-    {
-        drainCommentsBefore(node->loc);
-
-        m_writer.write(lookup(node->name));
-        m_writer.write(": ");
-        if (node->type)
-        {
-            writeTypeId(node->type);
-        }
-        if (node->value)
-        {
-            m_writer.write(" = ");
-            writeValue(node->value);
-        }
-
-        drainTrailingComments(node->loc.line());
-        m_writer.newline();
-    }
-
-    void LayoutBuilder::writeCompositeDecl(const CompositeDeclAST *node)
-    {
-        writeAttributes(node->attributes);
-
-        m_writer.write("composite ");
-        m_writer.write(lookup(node->name));
-        m_writer.write(" {");
-        m_writer.newline();
-
-        bool wroteAnySection = false;
-
-        if (!node->inputs.empty())
-        {
-            m_writer.indent();
-            m_writer.write("input {");
-            m_writer.newline();
-            m_writer.indent();
-            for (CompositeInputAST *input : node->inputs)
-            {
-                if (!input)
-                    continue;
-                writeCompositeInput(input);
-            }
-            m_writer.dedent();
-            m_writer.write("}");
-            m_writer.newline();
-            m_writer.dedent();
-            wroteAnySection = true;
-        }
-
-        if (!node->outputs.empty())
-        {
-            if (wroteAnySection)
-                m_writer.newline();
-
-            m_writer.indent();
-            m_writer.write("output {");
-            m_writer.newline();
-            m_writer.indent();
-            for (CompositeOutputAST *output : node->outputs)
-            {
-                if (!output)
-                    continue;
-                writeCompositeOutput(output);
-            }
-            m_writer.dedent();
-            m_writer.write("}");
-            m_writer.newline();
-            m_writer.dedent();
-            wroteAnySection = true;
-        }
-
-        if (!node->body.empty())
-        {
-            if (wroteAnySection)
-                m_writer.newline();
-
-            m_writer.indent();
-            bool first = true;
-            for (DeclAST *decl : node->body)
-            {
-                if (!decl)
-                    continue;
-                if (decl->kind == ASTKind::Unknown)
-                {
-                    drainCommentsBefore(decl->loc);
-                    continue;
-                }
-                if (!first)
-                    m_writer.newline();
-                writeDecl(decl);
-                first = false;
-            }
-            m_writer.dedent();
-        }
-
-        m_writer.write("}");
         m_writer.newline();
     }
 

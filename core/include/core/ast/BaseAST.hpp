@@ -75,9 +75,6 @@ struct EnumMemberAST;
 struct ResourceDeclAST;
 struct ResourceFieldAST;
 struct NodeDeclAST;
-struct CompositeDeclAST;
-struct CompositeInputAST;
-struct CompositeOutputAST;
 
 // ModuleAST.hpp
 struct ModuleAST;
@@ -130,9 +127,6 @@ enum class ASTKind : uint16_t
     ResourceDecl,
     ResourceField,
     NodeDecl,
-    CompositeDecl,
-    CompositeInput,
-    CompositeOutput,
 
     // ─── Root ───────────────────────────────────────────────────────────
     Module,
@@ -185,9 +179,6 @@ AST_KIND_OF(EnumMemberAST, EnumMember);
 AST_KIND_OF(ResourceDeclAST, ResourceDecl);
 AST_KIND_OF(ResourceFieldAST, ResourceField);
 AST_KIND_OF(NodeDeclAST, NodeDecl);
-AST_KIND_OF(CompositeDeclAST, CompositeDecl);
-AST_KIND_OF(CompositeInputAST, CompositeInput);
-AST_KIND_OF(CompositeOutputAST, CompositeOutput);
 AST_KIND_OF(ModuleAST, Module);
 AST_KIND_OF(UnknownAST, Unknown);
 
@@ -219,7 +210,7 @@ struct ASTKindMatches<DeclAST>
 {
     static bool check(ASTKind k) noexcept
     {
-        return k >= ASTKind::Decl && k <= ASTKind::CompositeOutput;
+        return k >= ASTKind::Decl && k <= ASTKind::NodeDecl;
     }
 };
 

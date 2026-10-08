@@ -8,12 +8,12 @@
  * reports it on a buffer.
  *
  * ─── Design: the code space reflects the new grammar ──────────────────────
- * The grammar in docs/grammar/LUCID_GRAMMAR.md has five top-level
- * declaration forms (import, enum, resource, node, composite), a single
- * type reference (`type_id`), and four value forms (literal, identifier,
+ * The grammar in docs/grammar/LUCID_GRAMMAR.md has four top-level
+ * declaration forms (import, enum, resource, node), a single type
+ * reference (`type_id`), and four value forms (literal, identifier,
  * field access, inline node). There are no functions, no statements, no
  * operators, no tables, no sequences, and no user-defined types beyond the
- * five declarations. The code space below covers exactly what the grammar
+ * four declarations. The code space below covers exactly what the grammar
  * can produce, plus the small set of names Sema will need when it lands.
  *
  * ─── Bands ────────────────────────────────────────────────────────────────
@@ -23,7 +23,6 @@
  *   4000-4099  Value and type
  *   5000-5099  Attributes
  *   5100-5199  Imports
- *   5200-5299  Composites
  *   7000-7099  Internal / panic / assertion
  *   8000-8299  Warnings
  *
@@ -83,7 +82,6 @@ namespace lucid::diag
         Value,
         Attribute,
         Import,
-        Composite,
         Internal, // free-text notes and hints (code 0)
         Warning,
         Unknown,
@@ -107,10 +105,10 @@ namespace lucid::diag
             return "Attribute";
         case DiagCategory::Import:
             return "Import";
-        case DiagCategory::Composite:
-            return "Composite";
         case DiagCategory::Internal:
             return "Internal";
+        case DiagCategory::Warning:
+            return "Warning";
         case DiagCategory::Unknown:
             return "Unknown";
         }
@@ -192,17 +190,6 @@ namespace lucid::diag
         Syntax_ExpectedNodeArgList = 2103,
         Syntax_ExpectedTriggerList = 2104, // 'on' present, no trigger
 
-        // ─── Composite (2120-2159) ─────────────────────────────────────────
-
-        Syntax_ExpectedCompositeName = 2120,
-        Syntax_ExpectedCompositeBody = 2121,
-        Syntax_ExpectedInputBlock = 2122,
-        Syntax_ExpectedOutputBlock = 2123,
-        Syntax_ExpectedInputField = 2124,
-        Syntax_ExpectedOutputField = 2125,
-        Syntax_ExpectedEmitsName = 2126,
-        Syntax_ExpectedOutputBinding = 2127, // '=' present, value missing
-
         // ─── Value (2160-2179) ─────────────────────────────────────────────
 
         Syntax_ExpectedValue = 2160,       // argument position, nothing valid
@@ -245,10 +232,10 @@ namespace lucid::diag
         Type_ArgCountMismatch = 4002,     // too many or too few args
         Type_UnknownNodeType = 4003,      // NodeType not in registry
         Type_UnknownType = 4004,          // type_id not in registry
-        Type_InvalidDefault = 4005,       // resource default type mismatch
-        Type_InvalidOutputBinding = 4006, // composite output binding mismatch
-        Type_InvalidNodeArg = 4007,       // argument not a valid value
-        Type_InvalidFieldAccess = 4008,   // base is not field-accessible
+        Type_InvalidDefault = 4005,     // resource default type mismatch
+        Type_InvalidBinding = 4006,     // binding mismatch between value and target
+        Type_InvalidNodeArg = 4007,    // argument not a valid value
+        Type_InvalidFieldAccess = 4008, // base is not field-accessible
 
         Value_DuplicateFieldDefault = 4101, // resource with two defaults
 
@@ -258,8 +245,8 @@ namespace lucid::diag
         //
         // The new grammar has exactly one recognized attribute: @export. Any
         // other @name is an unknown attribute. @export itself is only
-        // meaningful on resource and composite declarations; on any other
-        // declaration it is an error.
+        // meaningful on resource declarations; on any other declaration it is
+        // an error.
 
         Attr_Unknown = 5001,          // @name not recognized
         Attr_ExportOnImport = 5002,   // @export on import_decl
@@ -281,19 +268,6 @@ namespace lucid::diag
         Import_Circular = 5102,       // A imports B imports A
         Import_AliasCollision = 5103, // two imports bind the same name
         Import_NotAFile = 5104,       // path resolves to a directory
-
-        // ═════════════════════════════════════════════════════════════════════════
-        // COMPOSITES (5200-5299)
-        // ═════════════════════════════════════════════════════════════════════════
-        //
-        // Sema's territory. Composite expansion must be acyclic and the
-        // output block must reference names that exist in the body.
-
-        Composite_Cycle = 5201,              // composite references itself
-        Composite_OutputNotInBody = 5202,    // output binding names a missing symbol
-        Composite_EmitsNotTrigger = 5203,    // emits names a non-trigger node
-        Composite_InputNotUsed = 5204,       // input declared but never referenced
-        Composite_OutputTypeMismatch = 5205, // output type does not match binding
 
         // ═════════════════════════════════════════════════════════════════════════
         // INTERNAL / PANIC (7000-7099)
@@ -321,7 +295,6 @@ namespace lucid::diag
         Warn_DeadNode = 8005,     // action node with no trigger
         Warn_ShadowedName = 8006, // import alias shadows a type
         Warn_EmptyResource = 8007,
-        Warn_EmptyComposite = 8008,
         Warn_TrailingComma = 8009, // stylistic; formatter normalizes
 
         Warn_Deprecated = 8100, // reserved for a future @deprecated
@@ -353,8 +326,6 @@ namespace lucid::diag
             return DiagCategory::Attribute;
         if (v < 5200)
             return DiagCategory::Import;
-        if (v < 6000)
-            return DiagCategory::Composite;
         if (v < 8000)
             return DiagCategory::Internal;
         if (v < 9000)

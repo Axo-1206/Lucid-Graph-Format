@@ -11,39 +11,26 @@
  * ─── Design: parse functions build AST; they do not analyze ───────────────
  * No parser function resolves a name, checks a type, or decides whether
  * the program is well-formed. The parser produces a tree; Sema validates
- * it. The parser's only validation is syntactic — the shape of what it
- * read against the shape the grammar allows — and its only output on
- * failure is a diagnostic and a node marked `hasSyntaxError`.
+ * it.
  *
  * ─── Design: the two error behaviors ──────────────────────────────────────
  * A parser function that fails does one of two things:
  *
  *   1. PARTIAL-PARSE. It reports a diagnostic and returns a node with
- *      `hasSyntaxError = true`. The node is structurally valid; later
- *      passes skip it. Every function that can partial-parse does so.
+ *      `hasSyntaxError = true`.
  *
- *   2. SKIP. It reports a diagnostic and returns `nullptr`. The caller —
- *      which knows what construct the missing node was supposed to be
- *      part of — runs a synchronizer from ErrorRecovery.hpp and continues
- *      at the next plausible construct start.
- *
- * `nullptr` is a rare return; a function only returns it when it cannot
- * produce even a marked node. Each function's error behavior is
- * documented below.
+ *   2. SKIP. It reports a diagnostic and returns `nullptr`. The caller
+ *      runs a synchronizer from ErrorRecovery.hpp and continues at the
+ *      next plausible construct start.
  *
  * ─── Design: attributes are the dispatcher's job ──────────────────────────
  * A declaration is optionally preceded by a sequence of juxtaposed
- * attributes (`@name`). The declaration parser does not handle them:
- * `parseDecl` reads the attribute sequence before dispatching to the
- * specific declaration parser, and attaches the span to the returned
- * declaration node. A specific parser (parseResourceDecl, parseNodeDecl,
- * ...) never sees an `@`.
+ * attributes (`@name`). `parseDecl` reads the attribute sequence before
+ * dispatching to the specific declaration parser.
  *
  * ─── Design: every parse function has external linkage ────────────────────
  * Every function the parser defines is declared here and defined with
- * external linkage in one of the parser's .cpp files. There are no
- * static functions and no forward declarations in the .cpp files. This
- * keeps every parser function's signature visible in one place.
+ * external linkage in one of the parser's .cpp files.
  */
 
 #pragma once
@@ -178,42 +165,6 @@ namespace lucid::parser
     /// returns a marked node with a null `expr`. If the name is missing,
     /// returns nullptr.
     NodeDeclAST *parseNodeDecl(TokenStream &stream, ParserContext &ctx);
-
-    /// @brief Parse `composite NAME { ... }`.
-    ///
-    /// The body may contain an `input` block, an `output` block, and a
-    /// sequence of body declarations (imports, enums, resources, nodes).
-    /// Nested composites are a Sema error, not a parser error; the parser
-    /// would accept `composite` inside a body if the grammar allowed it, but
-    /// the grammar's `composite_body_decl` does not list `composite_decl`,
-    /// so a `composite` keyword inside a body is a syntax error.
-    ///
-    /// Error behavior: partial-parse. If the name is missing, returns
-    /// nullptr. If the body is malformed, returns a marked node with whatever
-    /// was read.
-    CompositeDeclAST *parseCompositeDecl(TokenStream &stream, ParserContext &ctx);
-
-    // =============================================================================
-    // 4. Composite field parsers
-    // =============================================================================
-
-    /// @brief Parse one composite input: `name: type`.
-    ///
-    /// Error behavior: partial-parse. If the type is missing, the returned
-    /// node has a null type and is marked. If the name is missing, returns
-    /// nullptr.
-    CompositeInputAST *parseCompositeInput(TokenStream &stream, ParserContext &ctx);
-
-    /// @brief Parse one composite output: `name: type = value`.
-    ///
-    /// The right-hand side is a value, not a literal: the grammar's
-    /// `composite_output` uses `value`.
-    ///
-    /// Error behavior: partial-parse. If the type is missing, the node's
-    /// type is null and marked. If the value after `=` is missing, the
-    /// node's value is null and marked. If the name is missing, returns
-    /// nullptr.
-    CompositeOutputAST *parseCompositeOutput(TokenStream &stream, ParserContext &ctx);
 
     // =============================================================================
     // 5. Type parser

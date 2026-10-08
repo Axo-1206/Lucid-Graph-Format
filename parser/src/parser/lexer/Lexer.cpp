@@ -158,14 +158,8 @@ namespace lucid::lexer
                 return TokenType::KW_RESOURCE;
             if (word == "node")
                 return TokenType::KW_NODE;
-            if (word == "composite")
-                return TokenType::KW_COMPOSITE;
             if (word == "on")
                 return TokenType::KW_ON;
-            if (word == "input")
-                return TokenType::KW_INPUT;
-            if (word == "output")
-                return TokenType::KW_OUTPUT;
             if (word == "true")
                 return TokenType::BOOL_LITERAL;
             if (word == "false")

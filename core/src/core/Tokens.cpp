@@ -6,9 +6,9 @@
 namespace
 {
 
-    /// The canonical spelling of a token type. One string literal per case, in
-    /// the same order as the enum. The array must stay in sync with TokenType;
-    /// tokenTypeName checks the index against the array's length.
+    /// The canonical spelling of a token type. One string literal per case,
+    /// in the same order as the enum. The array must stay in sync with
+    /// TokenType; tokenTypeName checks the index against the array's length.
     const char *kTokenNames[] = {
         // EOF / error
         "EOF",
@@ -23,12 +23,9 @@ namespace
         "enum",
         "resource",
         "node",
-        "composite",
 
-        // Composite-body keywords
+        // Node-body keywords
         "on",
-        "input",
-        "output",
 
         // Literals
         "integer literal",
@@ -84,14 +81,8 @@ const char *tokenTypeDescription(TokenType t) noexcept
         return "'resource'";
     case TokenType::KW_NODE:
         return "'node'";
-    case TokenType::KW_COMPOSITE:
-        return "'composite'";
     case TokenType::KW_ON:
         return "'on'";
-    case TokenType::KW_INPUT:
-        return "'input'";
-    case TokenType::KW_OUTPUT:
-        return "'output'";
     case TokenType::INT_LITERAL:
         return "an integer literal";
     case TokenType::FLOAT_LITERAL:

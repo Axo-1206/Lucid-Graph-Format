@@ -68,12 +68,6 @@ namespace lucid::parser::dump
                 return "ResourceField";
             case ASTKind::NodeDecl:
                 return "NodeDecl";
-            case ASTKind::CompositeDecl:
-                return "CompositeDecl";
-            case ASTKind::CompositeInput:
-                return "CompositeInput";
-            case ASTKind::CompositeOutput:
-                return "CompositeOutput";
             case ASTKind::Module:
                 return "Module";
             case ASTKind::Unknown:
@@ -209,15 +203,6 @@ namespace lucid::parser::dump
                 break;
             case ASTKind::NodeDecl:
                 writeNodeDecl(node->as<NodeDeclAST>());
-                break;
-            case ASTKind::CompositeDecl:
-                writeCompositeDecl(node->as<CompositeDeclAST>());
-                break;
-            case ASTKind::CompositeInput:
-                writeCompositeInput(node->as<CompositeInputAST>());
-                break;
-            case ASTKind::CompositeOutput:
-                writeCompositeOutput(node->as<CompositeOutputAST>());
                 break;
             case ASTKind::Decl:
             case ASTKind::Unknown:
@@ -418,52 +403,6 @@ namespace lucid::parser::dump
             m_writer.endArray();
 
             writeAttributes(node->attributes);
-            m_writer.endObject();
-        }
-
-        void writeCompositeDecl(const CompositeDeclAST *node)
-        {
-            m_writer.beginObject();
-            writeNodeHeader(node);
-            m_writer.kv("name", lookup(node->name));
-
-            m_writer.key("inputs");
-            writeNodeArray(node->inputs);
-
-            m_writer.key("outputs");
-            writeNodeArray(node->outputs);
-
-            m_writer.key("body");
-            writeNodeArray(node->body);
-
-            writeAttributes(node->attributes);
-            m_writer.endObject();
-        }
-
-        void writeCompositeInput(const CompositeInputAST *node)
-        {
-            m_writer.beginObject();
-            writeNodeHeader(node);
-            m_writer.kv("name", lookup(node->name));
-
-            m_writer.key("type");
-            writeNode(node->type);
-
-            m_writer.endObject();
-        }
-
-        void writeCompositeOutput(const CompositeOutputAST *node)
-        {
-            m_writer.beginObject();
-            writeNodeHeader(node);
-            m_writer.kv("name", lookup(node->name));
-
-            m_writer.key("type");
-            writeNode(node->type);
-
-            m_writer.key("value");
-            writeNode(node->value);
-
             m_writer.endObject();
         }
 

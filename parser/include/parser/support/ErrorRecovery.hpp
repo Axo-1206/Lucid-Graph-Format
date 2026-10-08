@@ -19,26 +19,15 @@
 /// function; that is each parser's own decision, made at its own error
 /// sites.
 ///
-/// ─── Two recovery contexts, no more ───────────────────────────────────────
-/// The Lucid Graph Format has exactly two nested declaration lists:
-///
-///   - The top level: `program ::= { top_decl }`. The recovery context is
-///     "a top-level declaration failed; skip to the next one."
-///
-///   - A composite body: `composite_decl`'s body is a sequence of
-///     `composite_body_decl`. The recovery context is "a body declaration
-///     failed; skip to the next one, or to the composite's closing `}`."
+/// ─── One recovery context ─────────────────────────────────────────────────
+/// The Lucid Graph Format has one declaration list: the top level
+/// (`program ::= { top_decl }`). The parser's recovery scan is used in
+/// the top-level loop when a declaration fails to parse. There is no
+/// second recovery context;
 ///
 /// There are no statements, no function bodies, no block-local
 /// declarations, and no other nested construct that needs its own recovery
-/// scan. The two contexts above are the entire set.
-///
-/// This file does not define the stop sets for those two contexts. A stop
-/// set is policy: it depends on which construct the caller is recovering
-/// into, and on what tokens are legal at that construct's start. Each stop
-/// set lives next to its single caller — one in `Parser.cpp`, one in
-/// `ParseComposite.cpp` — and is built from the start-set predicates in
-/// `GrammarPositions.hpp`. This file provides only the mechanism.
+/// scan. The context above are the entire set.
 ///
 /// ─── Design: two scans, one primitive ─────────────────────────────────────
 /// `synchronizeUntil` is the depth-blind scan: its predicate is
@@ -112,12 +101,6 @@ namespace lucid::parser
         /// opener on its own stack. The bracket belongs to an enclosing
         /// construct. The caller should treat this as "no target found in
         /// this construct" and recover upward.
-        ///
-        /// In the new grammar, the only foreign closer a top-level scan can
-        /// meet is a stray `}` from a missing `{` earlier in the file. A
-        /// composite-body scan can meet the composite's own closing `}`,
-        /// which it treats as a foreign closer unless its stop set already
-        /// stopped there.
         ForeignCloser,
 
         /// The scan reached end-of-input.
@@ -252,10 +235,6 @@ namespace lucid::parser
     /// `ForeignCloser` and `ReachedEnd` have the same meanings as in the
     /// single-argument form.
     ///
-    /// Use this form when the recovery decision depends on context — the
-    /// top-level and composite-body recovery scans are the two current users,
-    /// and both need to know whether they are inside a lost `{...}`.
-    ///
     /// @tparam Predicate  A callable `bool(TokenStream&, int)`.
     /// @param stream      The token stream to scan.
     /// @param stopAt      The predicate.
@@ -282,8 +261,7 @@ namespace lucid::parser
                 }
                 // A foreign closer: the predicate still gets a chance to stop
                 // here, because a caller may want to treat "the enclosing
-                // construct's `}`" as a legitimate stop point. The
-                // composite-body scan does exactly this.
+                // construct's `}`" as a legitimate stop point.
                 if (stopAt(stream, depth))
                 {
                     return SyncResult::Matched;
