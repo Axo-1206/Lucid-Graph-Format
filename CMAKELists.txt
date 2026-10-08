@@ -193,6 +193,7 @@ add_library(lucid_sema STATIC
     sema/src/sema/SymbolCollector.cpp
     sema/src/sema/Resolver.cpp
     sema/src/sema/TypeChecker.cpp
+    sema/src/sema/CompositeScope.cpp
     sema/src/sema/Sema.cpp
 )
 

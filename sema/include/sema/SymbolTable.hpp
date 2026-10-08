@@ -1,33 +1,28 @@
 /// @file sema/SymbolTable.hpp
 ///
-/// @brief A per-module symbol table.
+/// @brief A per-module or per-composite symbol table.
 ///
 /// ─── What a symbol table is ───────────────────────────────────────────────
-/// The set of names a module declares, mapped to the declarations that
-/// introduce them. Every top-level declaration with a name introduces
-/// a symbol: imports (which introduce an alias), enums, resources,
-/// nodes, and composites.
+/// The set of names a module (or a composite) declares, mapped to the
+/// declarations that introduce them.
 ///
-/// ─── One table per module ─────────────────────────────────────────────────
-/// Sema builds one SymbolTable per module. Cross-module name resolution
-/// (looking up a name through an import alias) uses a module's table as
-/// a lookup structure, but a symbol table does not span modules.
+/// ─── One table per scope ──────────────────────────────────────────────────
+/// A module has a table. A composite has its own local table for
+/// inputs and internal declarations. A composite's full scope is the
+/// local table plus the enclosing module's table (see CompositeScope).
 ///
 /// ─── What the table stores ────────────────────────────────────────────────
-/// A symbol is a name, a kind, and a pointer to the declaration. It
-/// does not store resolution annotations, type information, or anything
-/// computed by later passes. Those live in separate per-pass data
-/// structures. The symbol table is Pass 1's only output.
+/// A symbol is a name, a kind, and a pointer to the declaration. The
+/// pointer is a BaseAST*, not a DeclAST*, because composite inputs are
+/// not DeclASTs (they derive from BaseAST directly).
 ///
 /// ─── Duplicate names ──────────────────────────────────────────────────────
 /// Adding a symbol with a name that already exists reports
-/// Name_Redeclaration and returns false. The first declaration wins;
-/// the colliding one is not stored. Every subsequent collision is
-/// reported separately.
+/// Name_Redeclaration and returns false.
 
 #pragma once
 
-#include "core/ast/DeclAST.hpp"
+#include "core/ast/BaseAST.hpp"
 #include "core/diagnostics/Diagnostic.hpp"
 #include "core/memory/InternedString.hpp"
 
@@ -40,36 +35,44 @@ namespace lucid::sema
     /// @brief The kind of a symbol.
     enum class SymbolKind : uint8_t
     {
-        Import,     // an import alias
-        Enum,       // an enum type
-        Resource,   // a resource
-        Node,       // a node
-        Composite,  // a composite
+        Import,         // an import alias
+        Enum,           // an enum type
+        Resource,       // a resource
+        Node,           // a node
+        Composite,      // a composite
+        CompositeInput, // a composite input (local scope only)
     };
 
     /// @brief The name of a symbol kind, for diagnostics.
-    inline const char* symbolKindName(SymbolKind k) noexcept
+    inline const char *symbolKindName(SymbolKind k) noexcept
     {
         switch (k)
         {
-        case SymbolKind::Import:    return "import";
-        case SymbolKind::Enum:      return "enum";
-        case SymbolKind::Resource:  return "resource";
-        case SymbolKind::Node:      return "node";
-        case SymbolKind::Composite: return "composite";
+        case SymbolKind::Import:
+            return "import";
+        case SymbolKind::Enum:
+            return "enum";
+        case SymbolKind::Resource:
+            return "resource";
+        case SymbolKind::Node:
+            return "node";
+        case SymbolKind::Composite:
+            return "composite";
+        case SymbolKind::CompositeInput:
+            return "composite input";
         }
         return "symbol";
     }
 
-    /// @brief One entry in a module's symbol table.
+    /// @brief One entry in a symbol table.
     struct Symbol
     {
         InternedString name;
-        SymbolKind     kind;
-        DeclAST*       decl;
+        SymbolKind kind;
+        BaseAST *decl; // DeclAST* or CompositeInputAST*
     };
 
-    /// @brief A module's symbol table.
+    /// @brief A symbol table.
     class SymbolTable
     {
     public:
@@ -82,37 +85,21 @@ namespace lucid::sema
         /// If `name` is already in the table, reports a
         /// Name_Redeclaration diagnostic against `decl` and returns
         /// false. Otherwise adds the symbol and returns true.
-        ///
-        /// The first declaration with a given name wins. Subsequent
-        /// declarations with the same name are rejected.
         bool add(InternedString name,
                  SymbolKind kind,
-                 DeclAST* decl,
-                 lucid::diag::DiagnosticEngine& diag);
+                 BaseAST *decl,
+                 lucid::diag::DiagnosticEngine &diag);
 
         // ─── Query ─────────────────────────────────────────────────────────
 
-        /// @brief Find a symbol by name. Returns nullptr if not found.
-        const Symbol* find(InternedString name) const noexcept;
+        const Symbol *find(InternedString name) const noexcept;
 
-        /// @brief The number of symbols in the table.
         size_t size() const noexcept { return m_symbols.size(); }
-
-        /// @brief True if the table has no symbols.
         bool empty() const noexcept { return m_symbols.empty(); }
-
-        /// @brief All symbols, in insertion order.
-        const std::vector<Symbol>& all() const noexcept { return m_symbols; }
+        const std::vector<Symbol> &all() const noexcept { return m_symbols; }
 
     private:
         std::vector<Symbol> m_symbols;
-
-        // Linear lookup. Symbol tables for typical modules have fewer
-        // than a few hundred entries, so a linear scan is competitive
-        // with a hash map, and it preserves insertion order for `all()`.
-        //
-        // If a module ever has thousands of symbols, this becomes a
-        // hash map keyed on InternedString's id.
     };
 
 } // namespace lucid::sema

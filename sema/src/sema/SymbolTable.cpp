@@ -12,7 +12,7 @@ namespace lucid::sema
 
     bool SymbolTable::add(InternedString name,
                           SymbolKind kind,
-                          DeclAST *decl,
+                          BaseAST *decl,
                           lucid::diag::DiagnosticEngine &diag)
     {
         // ─── Duplicate check ───────────────────────────────────────────────
