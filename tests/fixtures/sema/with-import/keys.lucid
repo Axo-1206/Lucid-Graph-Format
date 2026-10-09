@@ -1,0 +1,2 @@
+@export
+enum Key { W, A, S, D }

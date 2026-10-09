@@ -1,0 +1,4 @@
+import keys
+resource R {
+    k: Key = Key.W,
+}

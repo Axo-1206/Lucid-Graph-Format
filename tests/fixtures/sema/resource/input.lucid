@@ -1,0 +1,4 @@
+resource PlayerState {
+    hp: int32 = 100,
+    name: string = "player",
+}

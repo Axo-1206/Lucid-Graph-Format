@@ -103,6 +103,7 @@ add_test(NAME formatter COMMAND test_formatter)
 # Regenerates all fixture expected files:
 #   - parser/good/*.lucid  → *.json   (parse + AST dump)
 #   - formatter/canonical/*.lucid → *.expected  (parse + format)
+#   - sema/*/input.lucid → expected.json (compile + graph dump)
 #
 # Also verifies formatter idempotence at generation time: if
 # format(format(x)) != format(x), the tool exits non-zero.
@@ -121,6 +122,7 @@ target_link_libraries(lucid-fixture-regen PRIVATE
     lucid_core
     lucid_parser
     lucid_formatter
+    lucid_sema
 )
 
 target_compile_definitions(lucid-fixture-regen PRIVATE
@@ -174,6 +176,7 @@ add_executable(test_sema
     sema/test_dead_code.cpp
     sema/test_import_resolver.cpp
     sema/test_multi_module.cpp
+    sema/test_sema_fixtures.cpp
 )
 
 target_link_libraries(test_sema PRIVATE
@@ -182,7 +185,12 @@ target_link_libraries(test_sema PRIVATE
 )
 
 target_include_directories(test_sema PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools"
     "${CMAKE_CURRENT_SOURCE_DIR}/../sema/src"
+)
+
+target_compile_definitions(test_sema PRIVATE
+    FIXTURE_DIR="${LUCID_FIXTURE_DIR}"
 )
 
 target_compile_options(test_sema PRIVATE ${LUCID_CXX_WARNINGS})

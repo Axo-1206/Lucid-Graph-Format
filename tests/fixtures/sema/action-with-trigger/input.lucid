@@ -1,0 +1,2 @@
+node tick = EveryFrame()
+node print = PrintNode(1.5) on tick

@@ -197,6 +197,7 @@ add_library(lucid_sema STATIC
     sema/src/sema/DeadCodeChecker.cpp
     sema/src/sema/AttributeChecker.cpp
     sema/src/sema/ImportResolver.cpp
+    sema/src/sema/dump/GraphDumper.cpp
 )
 
 target_include_directories(lucid_sema

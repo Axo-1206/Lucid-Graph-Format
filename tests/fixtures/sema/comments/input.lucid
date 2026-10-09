@@ -1,0 +1,2 @@
+-- a comment
+node x = Float32Node(1.5)  -- trailing

@@ -47,9 +47,16 @@ namespace lucid::sema
             Bool,
             Char,
             String,
-            Int8,  Int16,  Int32,  Int64,
-            UInt8, UInt16, UInt32, UInt64,
-            Float32, Float64,
+            Int8,
+            Int16,
+            Int32,
+            Int64,
+            UInt8,
+            UInt16,
+            UInt32,
+            UInt64,
+            Float32,
+            Float64,
         };
 
         /// Which kind of literal this is. Determines which union member
@@ -68,11 +75,11 @@ namespace lucid::sema
         /// For Nil:     unused
         union
         {
-            bool     b;
-            char     c;
-            int64_t  i;
+            bool b;
+            char c;
+            int64_t i;
             uint64_t u;
-            double   f;
+            double f;
             struct
             {
                 uint32_t offset;
@@ -96,7 +103,7 @@ namespace lucid::sema
         static Literal makeString(uint32_t offset, uint32_t length)
         {
             Literal lit;
-            lit.kind          = Kind::String;
+            lit.kind = Kind::String;
             lit.string.offset = offset;
             lit.string.length = length;
             return lit;
@@ -108,8 +115,8 @@ namespace lucid::sema
 
         bool isInteger() const noexcept
         {
-            return kind == Kind::Int8  || kind == Kind::Int16  ||
-                   kind == Kind::Int32 || kind == Kind::Int64  ||
+            return kind == Kind::Int8 || kind == Kind::Int16 ||
+                   kind == Kind::Int32 || kind == Kind::Int64 ||
                    kind == Kind::UInt8 || kind == Kind::UInt16 ||
                    kind == Kind::UInt32 || kind == Kind::UInt64;
         }
@@ -123,24 +130,38 @@ namespace lucid::sema
     };
 
     /// @brief The name of a Literal::Kind, for diagnostics.
-    inline const char* literalKindName(Literal::Kind k) noexcept
+    inline const char *literalKindName(Literal::Kind k) noexcept
     {
         switch (k)
         {
-        case Literal::Kind::Nil:     return "Nil";
-        case Literal::Kind::Bool:    return "Bool";
-        case Literal::Kind::Char:    return "Char";
-        case Literal::Kind::String:  return "String";
-        case Literal::Kind::Int8:    return "Int8";
-        case Literal::Kind::Int16:   return "Int16";
-        case Literal::Kind::Int32:   return "Int32";
-        case Literal::Kind::Int64:   return "Int64";
-        case Literal::Kind::UInt8:   return "UInt8";
-        case Literal::Kind::UInt16:  return "UInt16";
-        case Literal::Kind::UInt32:  return "UInt32";
-        case Literal::Kind::UInt64:  return "UInt64";
-        case Literal::Kind::Float32: return "Float32";
-        case Literal::Kind::Float64: return "Float64";
+        case Literal::Kind::Nil:
+            return "Nil";
+        case Literal::Kind::Bool:
+            return "Bool";
+        case Literal::Kind::Char:
+            return "Char";
+        case Literal::Kind::String:
+            return "String";
+        case Literal::Kind::Int8:
+            return "Int8";
+        case Literal::Kind::Int16:
+            return "Int16";
+        case Literal::Kind::Int32:
+            return "Int32";
+        case Literal::Kind::Int64:
+            return "Int64";
+        case Literal::Kind::UInt8:
+            return "UInt8";
+        case Literal::Kind::UInt16:
+            return "UInt16";
+        case Literal::Kind::UInt32:
+            return "UInt32";
+        case Literal::Kind::UInt64:
+            return "UInt64";
+        case Literal::Kind::Float32:
+            return "Float32";
+        case Literal::Kind::Float64:
+            return "Float64";
         }
         return "Unknown";
     }

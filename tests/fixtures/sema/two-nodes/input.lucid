@@ -1,0 +1,2 @@
+node a = Float32Node(1.0)
+node b = Float32Node(a)

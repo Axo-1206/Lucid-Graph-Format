@@ -14,6 +14,9 @@
 //      produce the same output. If it does not, the tool reports the
 //      non-idempotent fixture and exits non-zero without writing.
 //
+//   3. Sema */input.lucid → */expected.json
+//      Compiles each fixture and dumps its graph to JSON.
+//
 // The formatter's idempotent/ fixtures have no generated output and are
 // not touched by this tool. They are checked by the test in
 // tests/formatter/test_formatter_fixtures.cpp.
@@ -32,6 +35,7 @@
 #include "parser/context/ParserContext.hpp"
 #include "parser/context/TokenStream.hpp"
 #include "parser/dump/JSONDumper.hpp"
+#include "SemaFixtureCommon.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -214,6 +218,48 @@ namespace
         return 0;
     }
 
+    // ─── Sema fixture regeneration ───────────────────────────────────────
+
+    int regenSemaFixtures(const fs::path &root)
+    {
+        if (!fs::exists(root))
+        {
+            std::cerr << "sema fixture directory does not exist: "
+                      << root << "\n";
+            return 0; // not an error; nothing to do
+        }
+
+        tests::sema_fixtures::FixtureRegistry reg;
+
+        int count = 0;
+        for (const auto &entry : fs::directory_iterator(root))
+        {
+            if (!entry.is_directory())
+                continue;
+            const fs::path dir = entry.path();
+            if (!fs::exists(dir / "input.lucid"))
+                continue;
+
+            const auto data = tests::sema_fixtures::loadFixture(dir);
+            const std::string json =
+                tests::sema_fixtures::compileAndDump(data, reg.registry);
+            if (json.empty())
+            {
+                std::cerr << "fixture did not compile: "
+                          << dir.filename().string() << "\n";
+                return 1;
+            }
+
+            writeFile(dir / "expected.json", json);
+            std::cout << "wrote " << dir.filename().string()
+                      << "/expected.json\n";
+            ++count;
+        }
+
+        std::cout << "regenerated " << count << " sema fixture(s)\n";
+        return 0;
+    }
+
 } // namespace
 
 int main()
@@ -230,6 +276,8 @@ int main()
 
     std::cout << "\n=== Formatter fixtures ===\n";
     if (regenFormatterFixtures(root / "formatter" / "canonical") != 0)
+        return 1;
+    if (regenSemaFixtures(root / "sema") != 0)
         return 1;
 
     return 0;

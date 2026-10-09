@@ -1,0 +1,1 @@
+{"registryFingerprint":"0","stringPool":{"size":0,"bytes":""},"nodes":[{"index":0,"typeId":0,"phase":0,"args":[{"kind":"Literal","literal":{"kind":"Float32","value":1}}],"subscribers":[]},{"index":1,"typeId":0,"phase":0,"args":[{"kind":"NodeRef","node":0}],"subscribers":[]}],"resources":[],"phaseOrder":[],"valueOrder":[0,1]}
