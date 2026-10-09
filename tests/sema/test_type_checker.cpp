@@ -253,7 +253,8 @@ TEST_CASE("type checker accepts nil for a handle port",
     Fixture f;
     auto r = f.run(
         "resource Player { }\n"
-        "node m = MoveBody(nil)\n");
+        "node tick = EveryFrame()\n"
+        "node m = MoveBody(nil) on tick\n");
     CHECK_FALSE(f.diag.hasErrors());
 }
 
