@@ -155,8 +155,10 @@ namespace lucid::parser
 
     /// @brief Parse `resource NAME { fields }`.
     ///
-    /// The body is a sequence of resource fields. Duplicate field names are
-    /// not checked here; Sema reports them.
+    /// The body is a comma-separated list of resource fields
+    /// (`name: type [ = value ]`), with an optional trailing comma. The
+    /// list is structurally identical to an enum's member list. Duplicate
+    /// field names are not checked here; Sema reports them.
     ///
     /// Error behavior: if the name is missing, returns nullptr. If the body
     /// is malformed, returns a marked node with whatever fields were read.

@@ -22,7 +22,7 @@
  *   4000-4099  Value and type
  *   5000-5099  Attributes
  *   5100-5199  Imports
- *   5300-5399  Event rules
+ *   5300-5399  Trigger rules
  *   7000-7099  Internal / panic / assertion
  *   8000-8299  Warnings
  *
@@ -272,18 +272,19 @@ namespace lucid::diag
         Import_NotAFile = 5103,       // path resolves to a directory
 
         // ═════════════════════════════════════════════════════════════════════════
-        // EVENT RULES (5300-5399)
+        // TRIGGER RULES (5300-5399)
         // ═════════════════════════════════════════════════════════════════════════
         //
         // Sema's rules about node subscription. The format has no Event
-        // type and no composite nodes; a trigger source is only a trigger
-        // node, and an action node must have at least one `on` clause.
+        // type, no ports, and no composite nodes; a trigger source is only
+        // a trigger node, and an action node must have at least one `on`
+        // clause.
         //
         //   - An `on` clause's target must be a trigger node.
         //   - An action node must have at least one `on` clause.
 
-        Event_OnTargetNotTrigger = 5301,
-        Event_ActionWithoutOn = 5302,
+        Trigger_OnTargetNotTrigger = 5301,
+        Trigger_ActionWithoutOn = 5302,
 
         // ═════════════════════════════════════════════════════════════════════════
         // INTERNAL / PANIC (7000-7099)

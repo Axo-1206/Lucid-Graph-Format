@@ -3,7 +3,6 @@
 /// @brief Implementation of Sema's public entry points.
 
 #include "sema/Sema.hpp"
-#include "EventChecker.hpp"
 #include "Resolver.hpp"
 #include "SymbolCollector.hpp"
 #include "TypeChecker.hpp"
@@ -45,12 +44,9 @@ namespace lucid::sema
         ResolutionMap resolutions;
         resolveNames(module, symbols, resolutions, diag);
 
-        // ─── Pass 3: type checking ─────────────────────────────────────────
+        // ─── Pass 3: type checking and trigger rules ───────────────────────
         TypeMap types;
         checkTypes(module, symbols, resolutions, registry, types, diag);
-
-        // ─── Pass 4: Event rules ───────────────────────────────────────────
-        checkEvents(module, symbols, resolutions, registry, diag);
 
         // ─── Stop if any pass reported errors ──────────────────────────────
         if (diag.hasErrors())
@@ -61,10 +57,10 @@ namespace lucid::sema
             return result;
         }
 
-        // ─── Pass 5+ not implemented ───────────────────────────────────────
+        // ─── Pass 4+ not implemented ───────────────────────────────────────
         diag.errorAt(DiagCode::Internal_NotImplemented,
                      SourceLocation{1, 1},
-                     "sema: passes after Event checking "
+                     "sema: passes after type checking "
                      "are not yet implemented");
 
         result.ok = false;

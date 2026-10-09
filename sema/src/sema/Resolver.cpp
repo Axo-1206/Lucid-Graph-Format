@@ -28,8 +28,9 @@ namespace lucid::sema
         /// deferred (null) resolution and return null.
         ///
         /// The caller decides whether to report an error for a null
-        /// result. Some references are deferred without an error (import
-        /// aliases); others are errors (unknown local names).
+        /// result. Some references are deferred without an error
+        /// (qualified types, references through an import); others are
+        /// errors (unknown local names).
         const BaseAST *resolveLocal(const SymbolTable &symbols,
                                     ResolutionMap &resolutions,
                                     const BaseAST *ref,
@@ -70,7 +71,7 @@ namespace lucid::sema
         void resolveResourceDecl(const ResourceDeclAST *decl);
         void resolveNodeDecl(const NodeDeclAST *decl);
 
-        // ─── Fields, ───────────────────────────────────────────────────────
+        // ─── Fields ────────────────────────────────────────────────────────
 
         void resolveResourceField(const ResourceFieldAST *field);
 
@@ -145,9 +146,10 @@ namespace lucid::sema
         if (decl == nullptr)
             return;
 
-        // The import's path is resolved by the import resolver, not
-        // here. The alias is a symbol that Pass 1 already added. There
-        // is nothing to resolve in this declaration.
+        // The import's path is resolved by the import resolver (a
+        // later pass), not here. The import binds a module name that
+        // Pass 1 added as a symbol; there is nothing to resolve in
+        // this declaration itself.
         (void)decl;
     }
 
@@ -157,8 +159,8 @@ namespace lucid::sema
             return;
 
         // Enum members are names; they have no references to resolve.
-        // The enum itself is a symbol; the script's enum declaration is
-        // validated against the registry in Step 7.4.
+        // The enum itself is a symbol; the script's enum declaration
+        // is validated against the registry in Pass 3.
         (void)decl;
     }
 
@@ -185,7 +187,7 @@ namespace lucid::sema
 
         if (field->defaultValue != nullptr)
         {
-            resolveLiteralValue(field->defaultValue);
+            resolveValue(field->defaultValue);
         }
     }
 
@@ -201,7 +203,7 @@ namespace lucid::sema
         }
 
         // The node's triggers. Each trigger name is a reference to
-        // another node in the same module).
+        // another node in the same module.
         resolveTriggers(decl->triggers, decl);
     }
 
@@ -234,7 +236,7 @@ namespace lucid::sema
             }
 
             // Record the resolution. The trigger's "reference node" is
-            // the enclosing node declaration; Step 7.6 walks the
+            // the enclosing node declaration; a later pass walks the
             // resolution map to find which nodes subscribe to which
             // triggers.
             m_resolutions.record(nodeDecl, symbol->decl);
@@ -302,14 +304,15 @@ namespace lucid::sema
         //   - A resource: `Config.speed` → resolve `Config`, then look
         //     up `speed` among its fields.
         //   - An enum: `Key.W` → resolve `Key`, then look up `W` in
-        //     the registry's enum members (Step 7.4).
-        //   - An import alias: `health.Health` → resolve `health` (an
-        //     import), then look up `Health` in the imported module's
-        //     symbol table (Step 7.8).
+        //     the registry's enum members.
+        //   - A node: `player_health.current` → resolve `player_health`,
+        //     then look up `current` among its outputs.
         //
-        // For Step 7.3, we resolve the object and record a deferred
-        // resolution for the field. The specific field lookup happens
-        // in later steps when the object's kind is known.
+        // The resolver records the *object's* declaration as the
+        // resolution of the field access. The consumer (the type
+        // checker, and later passes) reads the object's kind and
+        // resolves the field against it. See ResolutionMap.hpp for
+        // the convention.
         const Symbol *objectSymbol = m_symbols.find(value->object);
 
         if (objectSymbol == nullptr)
@@ -325,10 +328,6 @@ namespace lucid::sema
             return;
         }
 
-        // Record the object's resolution. The full field resolution
-        // is deferred: the resolver records the object's symbol as
-        // the "resolved object," and Step 7.4/7.6/7.8 resolve the
-        // field against the object's kind.
         m_resolutions.record(value, objectSymbol->decl);
     }
 
@@ -365,19 +364,24 @@ namespace lucid::sema
         if (type == nullptr)
             return;
 
-        // A type name might be:
+        // A qualified type (`core::Key`) resolves through an import.
+        // The resolver does not load imports; that is a later pass's
+        // job. Record a deferred resolution for any qualified type.
+        if (type->isQualified())
+        {
+            m_resolutions.record(type, nullptr);
+            return;
+        }
+
+        // An unqualified type name might be:
         //   - A primitive: `float32`, `int32`, etc.
         //   - A handle: `BodyRef`, `TextureRef`, etc.
         //   - An enum: `Key`, `Direction`.
         //   - A resource: a resource used as a type in a field.
         //
-        // Primitives and handles are registry concerns; Step 7.4 checks
+        // Primitives and handles are registry concerns; Pass 3 checks
         // them against the registry. Enums and resources are module
         // symbols; the resolver records their resolution.
-        //
-        // For Step 7.3, we record the resolution if the name is in the
-        // symbol table. If not, we defer: the name might be a registry
-        // type checked in Step 7.4.
         const Symbol *symbol = m_symbols.find(type->name);
 
         if (symbol != nullptr &&
@@ -389,8 +393,8 @@ namespace lucid::sema
         else
         {
             // Not a module symbol. Might be a primitive or handle
-            // (Step 7.4), or a qualified type through an import
-            // (Step 7.8). Defer.
+            // (Pass 3), or a name that does not resolve at all.
+            // Record a deferred (null) resolution.
             m_resolutions.record(type, nullptr);
         }
     }

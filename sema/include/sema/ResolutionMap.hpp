@@ -8,12 +8,7 @@
 /// TypeIdAST, a NodeExprAST's type, or a trigger name's node — any
 /// place in the AST where a name refers to something else.
 ///
-/// The target is the declaration node that introduces the name. It is
-/// not always a DeclAST:
-/// a few other reference kinds resolve to non-DeclAST targets. The
-/// value type is BaseAST* so the map covers every case.
-///
-/// ─── Three states ─────────────────────────────────────────────────────────
+/// ─── The three states ─────────────────────────────────────────────────────
 /// A reference has one of three states in the map:
 ///
 ///   - Not recorded. The resolver did not visit it. This is a bug;
@@ -21,8 +16,44 @@
 ///   - Recorded with a non-null target. The reference resolved to a
 ///     declaration.
 ///   - Recorded with a null target. The reference was deferred. It is
-///     used for references to imported modules that have not yet been
-///     loaded. Step 7.8 fills these in.
+///     used for references that the resolver cannot resolve locally:
+///     a qualified type through an import, a handle type that lives
+///     in the registry, and so on. A later pass fills these in.
+///
+/// ─── What a target is, per reference kind ─────────────────────────────────
+/// The target is the declaration that introduces the name. Which
+/// declaration that is depends on the reference:
+///
+///   IdentifierValueAST
+///     A bare name: `player`. The target is the declaration the name
+///     refers to, or null if the reference was deferred.
+///
+///   TypeIdAST
+///     A type name: `Key`, `core::Key`. For a local enum or resource,
+///     the target is the declaration. For a primitive or handle, the
+///     target is null (the registry is checked in Pass 3). For a
+///     qualified type, the target is null (a later pass resolves it
+///     through the import).
+///
+///   FieldAccessValueAST
+///     A field access: `Config.speed`, `Key.W`, `player_health.current`.
+///     The target is the **object's** declaration, not the field's.
+///     `Config.speed` records the `ResourceDeclAST` for `Config`;
+///     `Key.W` records the `EnumDeclAST` for `Key`. The consumer (the
+///     type checker, and later passes) reads the object's kind and
+///     resolves the field against it. Recording the object's
+///     declaration is deliberate: the field's target has no single
+///     AST kind (a resource field, an enum member, and a node output
+///     are different things), and the object's declaration is the
+///     common piece every consumer already needs.
+///
+///   Trigger names (in a NodeDeclAST's `on` clause)
+///     The `on` clause's targets are stored as a span of interned
+///     names, not as individual AST nodes. The resolver records the
+///     target node's declaration keyed by the **enclosing node
+///     declaration**, not by the trigger name. A node with two
+///     triggers records only one entry, and the last one wins. This
+///     is a known limitation; see the note in Resolver.cpp.
 ///
 /// ─── Why a separate map and not AST fields ────────────────────────────────
 /// The AST is deliberately syntactic. Adding resolution pointers to it
@@ -56,12 +87,12 @@ namespace lucid::sema
         /// @brief Record that `ref` resolved to `target`.
         ///
         /// `target` may be null, meaning the reference was deferred
-        /// (typically, a reference to an imported module that has not
-        /// been loaded yet).
+        /// (typically, a reference that a later pass resolves, such as
+        /// a qualified type through an import).
         ///
         /// If `ref` was already recorded, the new entry overwrites the
-        /// old one. This lets Step 7.8 overwrite deferred entries with
-        /// proper resolutions.
+        /// old one. This lets a later pass overwrite a deferred entry
+        /// with a proper resolution.
         void record(const BaseAST *ref, const BaseAST *target)
         {
             m_map[ref] = target;
@@ -75,6 +106,10 @@ namespace lucid::sema
         /// recorded with a null target. The two cases are
         /// indistinguishable at the call site; both mean "no target
         /// available."
+        ///
+        /// The meaning of the returned pointer depends on the reference
+        /// kind. See the file-level doc for what each reference kind
+        /// records.
         const BaseAST *lookup(const BaseAST *ref) const noexcept
         {
             auto it = m_map.find(ref);

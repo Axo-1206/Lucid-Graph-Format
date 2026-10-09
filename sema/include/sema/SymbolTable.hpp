@@ -32,7 +32,7 @@ namespace lucid::sema
     /// @brief The kind of a symbol.
     enum class SymbolKind : uint8_t
     {
-        Import,   // an import alias
+        Import,   // an imported module's name binding
         Enum,     // an enum type
         Resource, // a resource
         Node,     // a node

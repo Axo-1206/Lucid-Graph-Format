@@ -64,9 +64,14 @@ namespace lucid::sema
         std::string_view name;
     };
 
-    // ─── Node ports ───────────────────────────────────────────────────────────
+    // ─── Node arguments ───────────────────────────────────────────────────────
 
-    struct NodePortInfo
+    /// @brief One declared argument of a node type.
+    ///
+    /// The grammar's `node_expr` supplies arguments positionally:
+    /// `NodeType(arg0, arg1, ...)`. The name is used for diagnostics only;
+    /// a call site does not name its arguments.
+    struct NodeArgInfo
     {
         std::string_view name;
         TypeId type;
@@ -74,6 +79,16 @@ namespace lucid::sema
 
     // ─── Node types ───────────────────────────────────────────────────────────
 
+    /// @brief One node type declared by the engine.
+    ///
+    /// A node type has a name, a kind, a category, a phase, and a list of
+    /// positional arguments. A Value node also has a result type: the type
+    /// of the value it produces. Action and Trigger nodes have no result;
+    /// their `resultType` is left invalid.
+    ///
+    /// There is no separate "input" and "output" port model. A node's
+    /// arguments are what the grammar's call site supplies. The result is
+    /// what a Value node produces.
     struct NodeTypeInfo
     {
         std::string_view name;
@@ -81,9 +96,15 @@ namespace lucid::sema
         std::string_view category;
         uint32_t phase = 0;
 
-        ArenaSpan<NodePortInfo> inputs;
-        ArenaSpan<NodePortInfo> outputs;
-        ArenaSpan<NodePortInfo> payload;
+        /// The declared arguments, in call-site order. The grammar supplies
+        /// arguments positionally; Sema checks count and types against this
+        /// span.
+        ArenaSpan<NodeArgInfo> args;
+
+        /// The result type of a Value node. Invalid for Action and Trigger
+        /// nodes. A Value node with an invalid `resultType` is a registry
+        /// error; Sema reports it when the type checker reads the result.
+        TypeId resultType;
     };
 
     // ─── The Registry ─────────────────────────────────────────────────────────

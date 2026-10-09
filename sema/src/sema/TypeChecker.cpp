@@ -1,6 +1,6 @@
 /// @file sema/src/sema/TypeChecker.cpp
 ///
-/// @brief Implementation of Pass 3: type checking.
+/// @brief Implementation of Pass 3: type checking and the trigger rules.
 ///
 /// ─── The walk ─────────────────────────────────────────────────────────────
 /// One function per AST kind. Each function assigns types to the
@@ -10,6 +10,15 @@
 /// Node types and enum types are looked up in the registry by name.
 /// Because the registry's spans are unsorted, a linear scan is used.
 /// For typical registries (tens to hundreds of entries), this is fine.
+///
+/// ─── The trigger rules ────────────────────────────────────────────────────
+/// Two rules are enforced during the node-declaration walk:
+///
+///   - An action node must have at least one `on` clause.
+///   - An `on` clause's target must resolve to a trigger node.
+///
+/// Both rules live in checkNodeDecl. They share the NodeTypeInfo lookup
+/// with the type checks, so no separate walk is needed.
 
 #include "TypeChecker.hpp"
 
@@ -66,24 +75,6 @@ namespace lucid::sema
             return nullptr;
         }
 
-        // ─── Type compatibility ────────────────────────────────────────────
-
-        /// True if an expression of type `value` can be used where a
-        /// slot of type `slot` is expected.
-        ///
-        /// The rules:
-        ///   - Exact match on kind and name.
-        ///   - `nil` (value.kind == Invalid and value is the nil literal)
-        ///     is compatible with any Handle slot.
-        ///
-        /// The nil case is handled by the caller, which knows whether
-        /// the argument is a nil literal. This function only handles
-        /// non-nil types.
-        bool typesMatch(TypeId value, TypeId slot) noexcept
-        {
-            return value == slot;
-        }
-
     } // namespace
 
     // ─── TypeChecker ──────────────────────────────────────────────────────────
@@ -123,6 +114,15 @@ namespace lucid::sema
 
         TypeId checkTypeId(const TypeIdAST *type);
 
+        // ─── Trigger rules ─────────────────────────────────────────────────
+
+        /// Rule 2: an action node must have at least one `on` clause.
+        void checkActionHasOn(const NodeDeclAST *decl,
+                              const NodeTypeInfo *info);
+
+        /// Rule 1: every `on` target must resolve to a trigger node.
+        void checkOnTargets(const NodeDeclAST *decl);
+
         // ─── Helpers ───────────────────────────────────────────────────────
 
         std::string_view name(InternedString s) const
@@ -132,15 +132,27 @@ namespace lucid::sema
             return m_diag.stringPool()->lookupView(s);
         }
 
-        /// True if the value node's type is a value node with a single
-        /// output.
+        /// The NodeTypeInfo of a node declaration's type. Returns
+        /// nullptr if the declaration is malformed, the type is
+        /// missing, or the type is unknown.
+        const NodeTypeInfo *nodeTypeOf(const NodeDeclAST *decl) const
+        {
+            if (decl == nullptr || decl->expr == nullptr ||
+                decl->expr->type == nullptr)
+            {
+                return nullptr;
+            }
+            return lookupNodeType(m_registry,
+                                  name(decl->expr->type->name));
+        }
+
+        /// The result type of a Value node. Returns an invalid TypeId
+        /// for Action and Trigger nodes.
         TypeId resultTypeOf(const NodeTypeInfo &info) const
         {
             if (info.kind != NodeKind::Value)
                 return TypeId{};
-            if (info.outputs.size() != 1)
-                return TypeId{};
-            return info.outputs[0].type;
+            return info.resultType;
         }
 
         // ─── State ─────────────────────────────────────────────────────────
@@ -202,37 +214,28 @@ namespace lucid::sema
         if (field == nullptr)
             return;
 
-        // ─── The field's type ──────────────────────────────────────────────
         TypeId fieldType;
         if (field->type != nullptr)
         {
             fieldType = checkTypeId(field->type);
         }
 
-        // The field's type must be a value type. Event is not allowed.
-        if (fieldType.isValid() && fieldType.isEvent())
-        {
-            m_diag.error(DiagCode::Type_InvalidDefault, field,
-                         "a resource field cannot have type Event");
-            return;
-        }
-
         if (!fieldType.isValid())
         {
-            // checkTypeId already reported the error.
             return;
         }
 
-        // ─── The field's default ───────────────────────────────────────────
         if (field->defaultValue == nullptr)
             return;
 
-        const TypeId defaultType = checkLiteralValue(field->defaultValue);
+        // The default is a general value, not a literal.
+        const TypeId defaultType = checkValue(field->defaultValue);
 
-        // The default must match the field's type. nil is allowed for
-        // handle types.
-        const bool isNil = (defaultType.kind == TypeId::Kind::Invalid &&
-                            field->defaultValue->kind == LiteralKind::Nil);
+        // nil is allowed for handle types.
+        const bool isNil =
+            (field->defaultValue->kind == ASTKind::LiteralValue &&
+             field->defaultValue->as<LiteralValueAST>()->kind ==
+                 LiteralKind::Nil);
 
         if (isNil)
         {
@@ -256,9 +259,77 @@ namespace lucid::sema
         if (decl == nullptr)
             return;
 
+        // ─── Type-check the node's expression ──────────────────────────────
         if (decl->expr != nullptr)
         {
             checkNodeExpr(decl->expr);
+        }
+
+        // ─── The trigger rules ─────────────────────────────────────────────
+        //
+        // Both rules need the node's NodeTypeInfo. Look it up once.
+        const NodeTypeInfo *info = nodeTypeOf(decl);
+        if (info != nullptr)
+        {
+            checkActionHasOn(decl, info);
+        }
+        checkOnTargets(decl);
+    }
+
+    // ─── Trigger rules ────────────────────────────────────────────────────────
+
+    void TypeChecker::checkActionHasOn(const NodeDeclAST *decl,
+                                       const NodeTypeInfo *info)
+    {
+        // Rule 2: an action node must have at least one `on` clause.
+        if (info->kind == NodeKind::Action && !decl->hasTriggers())
+        {
+            m_diag.error(DiagCode::Trigger_ActionWithoutOn, decl,
+                         "action node '", name(decl->name),
+                         "' has no `on` clause");
+        }
+    }
+
+    void TypeChecker::checkOnTargets(const NodeDeclAST *decl)
+    {
+        // Rule 1: every `on` target must resolve to a trigger node.
+        //
+        // The `on` clause's targets are stored as a span of
+        // InternedString in the AST. They do not carry their own AST
+        // nodes, so this check looks them up in the symbol table by
+        // name. A target that is not in the symbol table is reported
+        // by Pass 2 (Name_UndefinedTrigger), not here.
+        for (InternedString trigger : decl->triggers)
+        {
+            const Symbol *symbol = m_symbols.find(trigger);
+            if (symbol == nullptr)
+            {
+                // Pass 2 already reported this.
+                continue;
+            }
+            if (symbol->kind != SymbolKind::Node)
+            {
+                m_diag.error(DiagCode::Trigger_OnTargetNotTrigger, decl,
+                             "`on` target '", name(trigger),
+                             "' is not a trigger");
+                continue;
+            }
+
+            const auto *nodeDecl = symbol->decl->as<NodeDeclAST>();
+            const NodeTypeInfo *info = nodeTypeOf(nodeDecl);
+            if (info == nullptr)
+            {
+                // Unknown node type. Pass 3's expression check already
+                // reported it.
+                continue;
+            }
+            if (info->kind != NodeKind::Trigger)
+            {
+                m_diag.error(DiagCode::Trigger_OnTargetNotTrigger, decl,
+                             "`on` target '", name(trigger),
+                             "' is a ", nodeKindName(info->kind),
+                             " node, not a Trigger");
+            }
         }
     }
 
@@ -298,8 +369,8 @@ namespace lucid::sema
         //   Nil     → Invalid (special; allowed only for handles)
         //
         // The graph stores the literal's exact kind; the type checker
-        // records the "default" type. Actual port checking matches the
-        // literal's kind against the port's type.
+        // records the "default" type. Actual argument checking matches
+        // the literal's kind against the declared argument type.
         switch (value->kind)
         {
         case LiteralKind::Int:
@@ -347,14 +418,7 @@ namespace lucid::sema
         case ASTKind::NodeDecl:
         {
             const auto *nodeDecl = target->as<NodeDeclAST>();
-            // Look up the node type in the registry.
-            if (nodeDecl->expr == nullptr || nodeDecl->expr->type == nullptr)
-            {
-                m_types.record(value, TypeId{});
-                return TypeId{};
-            }
-            const auto *info = lookupNodeType(
-                m_registry, name(nodeDecl->expr->type->name));
+            const NodeTypeInfo *info = nodeTypeOf(nodeDecl);
             if (info == nullptr)
             {
                 m_types.record(value, TypeId{});
@@ -426,8 +490,8 @@ namespace lucid::sema
             if (enumInfo == nullptr)
             {
                 // The registry does not declare this enum. Deferred to
-                // Step 7.5 or reported elsewhere; for now, accept it
-                // and record the enum type by name.
+                // a later pass; for now, accept it and record the enum
+                // type by name.
                 const TypeId enumType =
                     TypeId::enumType(name(enumDecl->name));
                 m_types.record(value, enumType);
@@ -477,8 +541,6 @@ namespace lucid::sema
             return TypeId{};
         }
 
-        // Otherwise, the type name should resolve to a node type in
-        // the registry.
         const std::string_view nodeTypeName = name(node->type->name);
         const NodeTypeInfo *info = lookupNodeType(m_registry, nodeTypeName);
 
@@ -491,11 +553,11 @@ namespace lucid::sema
         }
 
         // ─── Check argument count ──────────────────────────────────────────
-        if (node->args.size() != info->inputs.size())
+        if (node->args.size() != info->args.size())
         {
             m_diag.error(DiagCode::Type_ArgCountMismatch, node,
                          "node type '", nodeTypeName, "' expects ",
-                         static_cast<uint64_t>(info->inputs.size()),
+                         static_cast<uint64_t>(info->args.size()),
                          " argument(s), but ",
                          static_cast<uint64_t>(node->args.size()),
                          " were given");
@@ -503,16 +565,16 @@ namespace lucid::sema
         }
 
         // ─── Check argument types ──────────────────────────────────────────
-        const size_t count = node->args.size() < info->inputs.size()
+        const size_t count = node->args.size() < info->args.size()
                                  ? node->args.size()
-                                 : info->inputs.size();
+                                 : info->args.size();
 
         for (size_t i = 0; i < count; ++i)
         {
             const TypeId argType = checkValue(node->args[i]);
-            const TypeId portType = info->inputs[i].type;
+            const TypeId declaredType = info->args[i].type;
 
-            // nil is allowed for handle ports.
+            // nil is allowed for handle types.
             const bool isNil =
                 (node->args[i] != nullptr &&
                  node->args[i]->kind == ASTKind::LiteralValue &&
@@ -521,7 +583,7 @@ namespace lucid::sema
 
             if (isNil)
             {
-                if (!portType.isHandle())
+                if (!declaredType.isHandle())
                 {
                     m_diag.error(DiagCode::Type_Mismatch, node->args[i],
                                  "nil is only valid for handle types");
@@ -532,20 +594,20 @@ namespace lucid::sema
             if (!argType.isValid())
             {
                 // The argument has no value type (a resource, an
-                // action node, etc.).
+                // action node, a trigger node, etc.).
                 m_diag.error(DiagCode::Type_InvalidNodeArg, node->args[i],
                              "argument is not a valid value");
                 continue;
             }
 
-            if (argType != portType)
+            if (argType != declaredType)
             {
                 m_diag.error(DiagCode::Type_Mismatch, node->args[i],
-                             "argument type does not match port type");
+                             "argument type does not match the declared type");
             }
         }
 
-        // ─── Check the node's result ───────────────────────────────────────
+        // ─── Record the node's result ──────────────────────────────────────
         const TypeId result = resultTypeOf(*info);
         m_types.record(node, result);
         return result;
@@ -595,14 +657,6 @@ namespace lucid::sema
         if (lookupHandleType(m_registry, canonical) != nullptr)
         {
             const TypeId t = TypeId::handle(canonical);
-            m_types.record(type, t);
-            return t;
-        }
-
-        // ─── Event ─────────────────────────────────────────────────────────
-        if (raw == "Event")
-        {
-            const TypeId t = TypeId::event();
             m_types.record(type, t);
             return t;
         }

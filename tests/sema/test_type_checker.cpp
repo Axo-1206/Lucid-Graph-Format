@@ -292,3 +292,13 @@ TEST_CASE("type checker rejects nil for a non-handle default",
     CHECK(f.diag.hasErrors());
     CHECK(f.diag.all().back().code == DiagCode::Type_InvalidDefault);
 }
+
+TEST_CASE("type checker accepts an enum member default",
+          "[sema][type-checker]")
+{
+    Fixture f;
+    auto r = f.run(
+        "enum Direction { N, S, E, W }\n"
+        "resource Config { dir: Direction = Direction.N }\n");
+    CHECK_FALSE(f.diag.hasErrors());
+}

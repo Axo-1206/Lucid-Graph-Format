@@ -3,7 +3,7 @@
 /// @brief A reference to a type, in the registry's vocabulary.
 ///
 /// ─── What a TypeId is ─────────────────────────────────────────────────────
-/// A type reference. It is one of four kinds:
+/// A type reference. It is one of three kinds:
 ///
 ///   Primitive — `bool`, `char`, `string`, `int8`..`int64`,
 ///               `uint8`..`uint64`, `float32`, `float64`. The name is
@@ -16,6 +16,7 @@
 /// is the canonical form. Sema normalizes aliases (`float` → `float32`)
 /// before constructing a TypeId, so the name field is always the
 /// canonical spelling.
+
 #pragma once
 
 #include <cstdint>
@@ -33,7 +34,6 @@ namespace lucid::sema
             Primitive,
             Enum,
             Handle,
-            Event,
         };
 
         /// Which category the type belongs to.
@@ -41,8 +41,7 @@ namespace lucid::sema
 
         /// The type's canonical name. For primitives, this is the
         /// canonical spelling (`float32`, not `float`). For enums and
-        /// handles, this is the host-declared name. For Event, this is
-        /// the literal string "Event".
+        /// handles, this is the host-declared name.
         std::string_view name;
 
         // ─── Construction ──────────────────────────────────────────────────
@@ -68,21 +67,16 @@ namespace lucid::sema
             return TypeId{Kind::Handle, n};
         }
 
-        static TypeId event()
-        {
-            return TypeId{Kind::Event, "Event"};
-        }
-
         // ─── Queries ───────────────────────────────────────────────────────
 
         bool isValid() const noexcept { return kind != Kind::Invalid; }
         bool isPrimitive() const noexcept { return kind == Kind::Primitive; }
         bool isEnum() const noexcept { return kind == Kind::Enum; }
         bool isHandle() const noexcept { return kind == Kind::Handle; }
-        bool isEvent() const noexcept { return kind == Kind::Event; }
 
-        /// True if this is a value type: primitive, enum, or handle.
-        /// Event is not a value type.
+        /// True if this is a value type. Every kind except Invalid is a
+        /// value type: a primitive is a value, an enum member is a value,
+        /// and a handle is a value.
         bool isValue() const noexcept
         {
             return kind == Kind::Primitive ||
@@ -116,8 +110,6 @@ namespace lucid::sema
             return "Enum";
         case TypeId::Kind::Handle:
             return "Handle";
-        case TypeId::Kind::Event:
-            return "Event";
         }
         return "Unknown";
     }

@@ -1,15 +1,34 @@
 /// @file sema/src/sema/TypeChecker.hpp
 ///
-/// @brief Pass 3 of Sema: assign types and check consistency.
+/// @brief Pass 3 of Sema: assign types, check consistency, and enforce
+///        the trigger rules.
 ///
 /// ─── What Pass 3 does ─────────────────────────────────────────────────────
-/// Walks the resolved module and, for every expression:
-///   - Assigns a TypeId.
-///   - Checks that uses are consistent: argument types match port
-///     types, resource defaults match field types, node expressions
-///     name existing node types, etc.
+/// Walks the resolved module and:
+///
+///   - Assigns a TypeId to every expression.
+///   - Checks that uses are consistent: argument types match the
+///     declared argument types, resource defaults match field types,
+///     node expressions name existing node types.
+///   - Enforces the two trigger rules:
+///       1. An `on` clause's target must resolve to a trigger node.
+///       2. An action node must have at least one `on` clause.
 ///
 /// Produces a TypeMap.
+///
+/// ─── Why the trigger rules live here ──────────────────────────────────────
+/// The trigger rules need the same inputs the type checker already
+/// has: the module, the symbol table, the registry, and the
+/// diagnostic engine. They produce no output; they only report. The
+/// type checker already walks every node declaration, so the rules
+/// run during that walk. A separate pass would duplicate the walk and
+/// add a file for two rules.
+///
+/// ─── Why this is not called "EventChecker" ────────────────────────────────
+/// The format has no Event type and no composite nodes. A trigger
+/// node is the only thing an `on` clause can target. The rules are
+/// about trigger nodes, not about an Event type.
+
 #pragma once
 
 #include "core/ast/ModuleAST.hpp"
@@ -22,7 +41,7 @@
 namespace lucid::sema
 {
 
-    /// @brief Assign types and check every use in a module.
+    /// @brief Assign types, check uses, and enforce the trigger rules.
     ///
     /// Preconditions:
     ///   - `module` is non-null.
@@ -32,7 +51,8 @@ namespace lucid::sema
     ///
     /// Postconditions:
     ///   - Every expression in the module is recorded in `types`.
-    ///   - Diagnostics are reported for type errors.
+    ///   - Diagnostics are reported for type errors and for violations
+    ///     of the trigger rules.
     void checkTypes(const ModuleAST *module,
                     const SymbolTable &symbols,
                     const ResolutionMap &resolutions,

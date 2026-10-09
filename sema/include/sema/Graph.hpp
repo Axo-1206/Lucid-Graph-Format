@@ -37,6 +37,21 @@ namespace lucid::sema
 
     // ─── Argument ─────────────────────────────────────────────────────────────
 
+    /// @brief One argument of a node, in the compiled graph.
+    ///
+    /// An argument is one of three things:
+    ///
+    ///   Literal      — a compile-time constant. An enum member such as
+    ///                  `Key.A` is resolved by Sema to an integer, so it
+    ///                  appears here as a Literal with an integer kind.
+    ///                  The graph stores the integer, not the member name.
+    ///   NodeRef      — a reference to another node's result, by index
+    ///                  into Graph::nodes.
+    ///   ResourceRef  — a reference to a resource field, by the pair
+    ///                  (resource index, field index).
+    ///
+    /// There is no separate "enum member" kind. An enum member is a
+    /// literal after Sema resolves it.
     struct Arg
     {
         enum class Kind : uint8_t
@@ -111,6 +126,19 @@ namespace lucid::sema
         uint32_t fields_count = 0;
     };
 
+    /// @brief One field of a resource.
+    ///
+    /// `defaultValue` is a Literal, not a general Arg. A field's default
+    /// must be a compile-time constant: a literal, an enum member
+    /// (resolved to an integer), or a node expression that Sema
+    /// constant-folds to a literal. A default that cannot be reduced to
+    /// a literal is a Sema error (`Type_InvalidDefault`).
+    ///
+    /// `hasDefault` distinguishes "no default written" from "a default
+    /// written as the field type's zero value." A field with no default
+    /// has `hasDefault == false` and is zero-initialized at load time.
+    /// A field with an explicit zero (`hp: int = 0`) has
+    /// `hasDefault == true` and `defaultValue` holding the zero literal.
     struct ResourceField
     {
         std::string_view name;

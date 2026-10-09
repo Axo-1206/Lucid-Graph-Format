@@ -11,17 +11,25 @@
 ///
 /// ─── What Sema does ───────────────────────────────────────────────────────
 /// Sema takes the parser's AST and the engine's Registry and produces a
-/// Graph. It performs nine steps, in order:
+/// Graph. It performs these steps, in order:
 ///
 ///   1. Load imports (via the CompileOptions::loadModule callback).
 ///   2. Collect symbols, per module.
 ///   3. Resolve names, per module.
-///   4. Type-check every node and value.
-///   5. Enforce the Event rules.
-///   6. Detect dead code (unused value nodes, un-on'd action nodes).
-///   7. Compute execution order and build the Graph.
+///   4. Type-check every node and value, and enforce the trigger rules:
+///      every `on` target must be a trigger node, and every action node
+///      must have at least one `on` clause.
+///   5. Detect dead code (unused value nodes).
+///   6. Compute execution order and build the Graph.
 ///
 /// If any step reports an error, subsequent steps are skipped.
+///
+/// ─── Why the trigger rules are in the type checker ────────────────────────
+/// The two trigger rules need the same inputs the type checker already
+/// has (the module, the symbol table, the registry, the diagnostic
+/// engine), produce no output, and run during the same walk over node
+/// declarations. A separate pass would duplicate the walk for two rules.
+/// See TypeChecker.hpp for the full reasoning.
 
 #pragma once
 
