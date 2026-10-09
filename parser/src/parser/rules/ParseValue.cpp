@@ -179,4 +179,35 @@ namespace lucid::parser
         return node;
     }
 
+    // =============================================================================
+    // parseLiteral
+    // =============================================================================
+
+    LiteralValueAST *parseLiteral(TokenStream &stream, ParserContext &ctx)
+    {
+        const TokenType current = stream.peekType();
+
+        if (!isLiteral(current))
+        {
+            ctx.diag.errorAt(DiagCode::Syntax_ExpectedLiteral,
+                             stream.currentLoc(),
+                             "expected a literal");
+
+            LiteralValueAST *node = ctx.arena.make<LiteralValueAST>();
+            node->loc = stream.currentLoc();
+            node->hasSyntaxError = true;
+            return node;
+        }
+
+        const SourceLocation startLoc = stream.currentLoc();
+        const InternedString text = stream.peekValue();
+        const LiteralKind kind = literalKindOf(current);
+        stream.consume();
+
+        LiteralValueAST *node =
+            ctx.arena.make<LiteralValueAST>(kind, text);
+        node->loc = startLoc;
+        return node;
+    }
+
 } // namespace lucid::parser

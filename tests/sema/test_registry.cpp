@@ -24,12 +24,9 @@ TEST_CASE("Registry holds spans of the engine's data", "[sema][registry]")
         {"update"},
     };
 
-    const NodePortInfo addInputs[] = {
+    const NodeArgInfo addArgs[] = {
         {"a", TypeId::primitive("float32")},
         {"b", TypeId::primitive("float32")},
-    };
-    const NodePortInfo addOutputs[] = {
-        {"result", TypeId::primitive("float32")},
     };
     const NodeTypeInfo nodeTypes[] = {
         {
@@ -37,9 +34,8 @@ TEST_CASE("Registry holds spans of the engine's data", "[sema][registry]")
             NodeKind::Value,
             "Math",
             0,
-            ArenaSpan<NodePortInfo>(addInputs, 2),
-            ArenaSpan<NodePortInfo>(addOutputs, 1),
-            ArenaSpan<NodePortInfo>{},
+            ArenaSpan<NodeArgInfo>(addArgs, 2),
+            TypeId::primitive("float32"),
         },
     };
 
@@ -52,9 +48,43 @@ TEST_CASE("Registry holds spans of the engine's data", "[sema][registry]")
     CHECK(reg.nodeTypes[0].name == "AddNode");
     CHECK(reg.nodeTypes[0].kind == NodeKind::Value);
     CHECK(reg.nodeTypes[0].category == "Math");
-    CHECK(reg.nodeTypes[0].inputs.size() == 2);
-    CHECK(reg.nodeTypes[0].outputs.size() == 1);
-    CHECK(reg.nodeTypes[0].payload.empty());
+    CHECK(reg.nodeTypes[0].args.size() == 2);
+    CHECK(reg.nodeTypes[0].args[0].name == "a");
+    CHECK(reg.nodeTypes[0].args[0].type == TypeId::primitive("float32"));
+    CHECK(reg.nodeTypes[0].resultType == TypeId::primitive("float32"));
+}
+
+TEST_CASE("An action node's resultType is invalid", "[sema][registry]")
+{
+    // Action nodes perform a side effect; they produce no value. Their
+    // resultType is left default-constructed (Kind::Invalid).
+    const NodeArgInfo bodyArgs[] = {
+        {"body", TypeId::handle("BodyRef")},
+    };
+    const NodeTypeInfo nodeTypes[] = {
+        {
+            "MoveBody",
+            NodeKind::Action,
+            "Physics",
+            0,
+            ArenaSpan<NodeArgInfo>(bodyArgs, 1),
+            TypeId{},
+        },
+    };
+
+    Registry reg;
+    reg.nodeTypes = ArenaSpan<NodeTypeInfo>(nodeTypes, 1);
+
+    CHECK(reg.nodeTypes[0].kind == NodeKind::Action);
+    CHECK_FALSE(reg.nodeTypes[0].resultType.isValid());
+}
+
+TEST_CASE("An empty NodeTypeInfo has no args and an invalid result",
+          "[sema][registry]")
+{
+    NodeTypeInfo info{};
+    CHECK(info.args.empty());
+    CHECK_FALSE(info.resultType.isValid());
 }
 
 TEST_CASE("NodeTypeInfo default phase is zero", "[sema][registry]")

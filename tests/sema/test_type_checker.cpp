@@ -1,6 +1,6 @@
 /// @file tests/sema/test_type_checker.cpp
 ///
-/// @brief Tests for Pass 3: type checking.
+/// @brief Tests for Pass 3: type checking and the trigger rules.
 
 #include "sema/TypeMap.hpp"
 
@@ -36,6 +36,13 @@ namespace
     //
     // Declares a handful of node types, enums, handles, and phases that
     // cover the cases the tests exercise.
+    //
+    // Node types:
+    //   Float32Node(value: float32) -> float32     (Value)
+    //   MoveBody(body: BodyRef)                    (Action)
+    //   Damage(body: BodyRef, amount: int32)       (Action)
+    //   EveryFrame()                               (Trigger)
+    //   OnCollision(body: BodyRef, tag: string)    (Trigger)
 
     struct TestRegistry
     {
@@ -44,10 +51,10 @@ namespace
         std::vector<EnumMemberInfo> keyMembers;
         std::vector<EnumTypeInfo> enums;
         std::vector<HandleTypeInfo> handles;
-        std::vector<NodePortInfo> floatArgs;
-        std::vector<NodePortInfo> floatOutputs;
-        std::vector<NodePortInfo> damageArgs;
-        std::vector<NodePortInfo> bodyArgs;
+        std::vector<NodeArgInfo> floatArgs;
+        std::vector<NodeArgInfo> moveBodyArgs;
+        std::vector<NodeArgInfo> damageArgs;
+        std::vector<NodeArgInfo> collisionArgs;
         std::vector<NodeTypeInfo> nodeTypes;
         Registry registry;
 
@@ -63,36 +70,48 @@ namespace
             handles.push_back(HandleTypeInfo{"BodyRef"});
 
             // Float32Node(value: float32) -> float32
-            floatArgs.push_back(NodePortInfo{"value",
-                                             TypeId::primitive("float32")});
-            floatOutputs.push_back(NodePortInfo{"out",
-                                                TypeId::primitive("float32")});
+            floatArgs.push_back(NodeArgInfo{"value",
+                                            TypeId::primitive("float32")});
             nodeTypes.push_back(NodeTypeInfo{
                 "Float32Node", NodeKind::Value, "Math", 0,
-                ArenaSpan<NodePortInfo>(floatArgs.data(), floatArgs.size()),
-                ArenaSpan<NodePortInfo>(floatOutputs.data(),
-                                        floatOutputs.size()),
-                ArenaSpan<NodePortInfo>{}});
+                ArenaSpan<NodeArgInfo>(floatArgs.data(), floatArgs.size()),
+                TypeId::primitive("float32")});
 
             // MoveBody(body: BodyRef)
-            bodyArgs.push_back(NodePortInfo{"body",
-                                            TypeId::handle("BodyRef")});
+            moveBodyArgs.push_back(NodeArgInfo{"body",
+                                               TypeId::handle("BodyRef")});
             nodeTypes.push_back(NodeTypeInfo{
                 "MoveBody", NodeKind::Action, "Physics", 0,
-                ArenaSpan<NodePortInfo>(bodyArgs.data(), bodyArgs.size()),
-                ArenaSpan<NodePortInfo>{},
-                ArenaSpan<NodePortInfo>{}});
+                ArenaSpan<NodeArgInfo>(moveBodyArgs.data(),
+                                       moveBodyArgs.size()),
+                TypeId{}});
 
             // Damage(body: BodyRef, amount: int32)
-            damageArgs.push_back(NodePortInfo{"body",
-                                              TypeId::handle("BodyRef")});
-            damageArgs.push_back(NodePortInfo{"amount",
-                                              TypeId::primitive("int32")});
+            damageArgs.push_back(NodeArgInfo{"body",
+                                             TypeId::handle("BodyRef")});
+            damageArgs.push_back(NodeArgInfo{"amount",
+                                             TypeId::primitive("int32")});
             nodeTypes.push_back(NodeTypeInfo{
                 "Damage", NodeKind::Action, "Physics", 0,
-                ArenaSpan<NodePortInfo>(damageArgs.data(), damageArgs.size()),
-                ArenaSpan<NodePortInfo>{},
-                ArenaSpan<NodePortInfo>{}});
+                ArenaSpan<NodeArgInfo>(damageArgs.data(), damageArgs.size()),
+                TypeId{}});
+
+            // EveryFrame()
+            nodeTypes.push_back(NodeTypeInfo{
+                "EveryFrame", NodeKind::Trigger, "Flow", 0,
+                ArenaSpan<NodeArgInfo>{},
+                TypeId{}});
+
+            // OnCollision(body: BodyRef, tag: string)
+            collisionArgs.push_back(NodeArgInfo{"body",
+                                                TypeId::handle("BodyRef")});
+            collisionArgs.push_back(NodeArgInfo{"tag",
+                                                TypeId::primitive("string")});
+            nodeTypes.push_back(NodeTypeInfo{
+                "OnCollision", NodeKind::Trigger, "Physics", 0,
+                ArenaSpan<NodeArgInfo>(collisionArgs.data(),
+                                       collisionArgs.size()),
+                TypeId{}});
 
             registry.phases = ArenaSpan<PhaseInfo>(phases.data(),
                                                    phases.size());
@@ -301,4 +320,61 @@ TEST_CASE("type checker accepts an enum member default",
         "enum Direction { N, S, E, W }\n"
         "resource Config { dir: Direction = Direction.N }\n");
     CHECK_FALSE(f.diag.hasErrors());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trigger rules
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_CASE("type checker accepts an action node with an `on` clause",
+          "[sema][type-checker]")
+{
+    Fixture f;
+    auto r = f.run(
+        "node on_hit = OnCollision(nil, \"hazard\")\n"
+        "node m = MoveBody(nil) on on_hit\n");
+    CHECK_FALSE(f.diag.hasErrors());
+}
+
+TEST_CASE("type checker rejects an action node with no `on` clause",
+          "[sema][type-checker]")
+{
+    Fixture f;
+    auto r = f.run("node m = MoveBody(nil)\n");
+    CHECK(f.diag.hasErrors());
+    CHECK(f.diag.all().back().code == DiagCode::Trigger_ActionWithoutOn);
+}
+
+TEST_CASE("type checker accepts a trigger node as an `on` target",
+          "[sema][type-checker]")
+{
+    Fixture f;
+    auto r = f.run(
+        "node tick = EveryFrame()\n"
+        "node m = MoveBody(nil) on tick\n");
+    CHECK_FALSE(f.diag.hasErrors());
+}
+
+TEST_CASE("type checker rejects a value node as an `on` target",
+          "[sema][type-checker]")
+{
+    Fixture f;
+    auto r = f.run(
+        "node speed = Float32Node(1.5)\n"
+        "node m = MoveBody(nil) on speed\n");
+    CHECK(f.diag.hasErrors());
+    CHECK(f.diag.all().back().code ==
+          DiagCode::Trigger_OnTargetNotTrigger);
+}
+
+TEST_CASE("type checker rejects an action node as an `on` target",
+          "[sema][type-checker]")
+{
+    Fixture f;
+    auto r = f.run(
+        "node other = MoveBody(nil) on other\n"
+        "node m = MoveBody(nil) on other\n");
+    // `other` is itself an action node (with a self-trigger, which is
+    // also an error). The second `on other` targets a non-trigger.
+    CHECK(f.diag.hasErrors());
 }

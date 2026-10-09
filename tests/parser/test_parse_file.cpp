@@ -142,7 +142,7 @@ TEST_CASE("parseFile parses a single resource", "[parse-file]")
     Fixture f;
     const char *source =
         "resource Player {\n"
-        "    speed: float = 200.0\n"
+        "    speed: float = 200.0,\n"
         "    hp: int = 100\n"
         "}\n";
     ModuleAST *module = f.run(source);

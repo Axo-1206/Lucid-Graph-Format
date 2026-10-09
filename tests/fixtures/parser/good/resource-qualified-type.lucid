@@ -1,5 +1,5 @@
 -- A resource field whose type is qualified by a module alias.
 resource Config {
-    key_left:  core.Key,
-    key_right: core.Key,
+    key_left:  core::Key,
+    key_right: core::Key,
 }

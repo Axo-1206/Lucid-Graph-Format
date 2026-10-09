@@ -88,6 +88,8 @@ TEST_CASE("collectSymbols on an empty module", "[sema][symbol-collector]")
 TEST_CASE("collectSymbols collects an import", "[sema][symbol-collector]")
 {
     Fixture f;
+    // The module name is the final path segment. There is no `as`
+    // clause; `import core.keys` binds `keys`.
     SymbolTable table = f.collect("import core.keys");
 
     REQUIRE(table.size() == 1);
@@ -96,14 +98,14 @@ TEST_CASE("collectSymbols collects an import", "[sema][symbol-collector]")
     CHECK(s->kind == SymbolKind::Import);
 }
 
-TEST_CASE("collectSymbols collects an aliased import",
+TEST_CASE("collectSymbols collects a single-segment import",
           "[sema][symbol-collector]")
 {
     Fixture f;
-    SymbolTable table = f.collect("import core.keys as k");
+    SymbolTable table = f.collect("import health");
 
     REQUIRE(table.size() == 1);
-    const auto *s = table.find(f.pool.intern("k"));
+    const auto *s = table.find(f.pool.intern("health"));
     REQUIRE(s != nullptr);
     CHECK(s->kind == SymbolKind::Import);
 }

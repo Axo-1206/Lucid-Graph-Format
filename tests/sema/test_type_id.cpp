@@ -21,7 +21,6 @@ TEST_CASE("TypeId primitive constructor", "[sema][type-id]")
     CHECK(t.isPrimitive());
     CHECK_FALSE(t.isEnum());
     CHECK_FALSE(t.isHandle());
-    CHECK_FALSE(t.isEvent());
     CHECK(t.isValue());
     CHECK(t.name == "float32");
 }
@@ -42,18 +41,19 @@ TEST_CASE("TypeId handle constructor", "[sema][type-id]")
     CHECK(t.name == "BodyRef");
 }
 
-TEST_CASE("TypeId Event is not a value", "[sema][type-id]")
-{
-    TypeId t = TypeId::event();
-    CHECK(t.isEvent());
-    CHECK_FALSE(t.isValue());
-    CHECK(t.name == "Event");
-}
-
 TEST_CASE("TypeId equality compares kind and name", "[sema][type-id]")
 {
     CHECK(TypeId::primitive("float32") == TypeId::primitive("float32"));
     CHECK(TypeId::primitive("float32") != TypeId::primitive("float64"));
-    CHECK(TypeId::enumType("Key")      != TypeId::handle("Key"));
-    CHECK(TypeId::event()              == TypeId::event());
+    CHECK(TypeId::enumType("Key") != TypeId::handle("Key"));
+}
+
+TEST_CASE("Every valid TypeId kind is a value type", "[sema][type-id]")
+{
+    // Every kind TypeId can have except Invalid is a value type.
+    // There is no fourth kind; the Event type was removed.
+    CHECK(TypeId::primitive("bool").isValue());
+    CHECK(TypeId::enumType("Direction").isValue());
+    CHECK(TypeId::handle("TextureRef").isValue());
+    CHECK_FALSE(TypeId{}.isValue());
 }

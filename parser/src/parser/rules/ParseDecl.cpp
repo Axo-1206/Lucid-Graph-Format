@@ -42,6 +42,7 @@
 #include "parser/rules/ParseDeclInternal.hpp"
 
 #include "core/diagnostics/DiagCode.hpp"
+#include "parser/support/GrammarPositions.hpp"
 
 using namespace lucid::diag;
 
@@ -318,6 +319,7 @@ namespace lucid::parser
         // An empty list is legal (`resource R { }`); in that case the first
         // token inside the braces is the closing `}`.
         auto fields = ctx.arena.makeBuilder<ResourceFieldAST *>();
+        bool bodyHasErrors = false;
 
         while (!stream.check(TokenType::RBRACE) && !stream.isAtEnd() &&
                ctx.canContinue())
@@ -326,12 +328,15 @@ namespace lucid::parser
             ResourceFieldAST *field = parseResourceField(stream, ctx);
             if (field)
             {
+                if (field->hasSyntaxError)
+                    bodyHasErrors = true;
                 fields.push_back(field);
             }
             else
             {
                 // parseResourceField reported. Skip to the next plausible
                 // field start, comma, or the closing brace.
+                bodyHasErrors = true;
                 synchronizeTo(stream,
                               TokenType::IDENTIFIER,
                               TokenType::COMMA,
@@ -358,6 +363,7 @@ namespace lucid::parser
             }
 
             // Neither `,` nor `}`. Report and recover.
+            bodyHasErrors = true;
             ctx.diag.errorAt(DiagCode::Syntax_ExpectedClosing,
                              stream.currentLoc(),
                              "expected ',' or '}' after a resource field");
@@ -377,6 +383,7 @@ namespace lucid::parser
 
         if (!stream.match(TokenType::RBRACE))
         {
+            bodyHasErrors = true;
             ctx.diag.errorAt(DiagCode::Syntax_ExpectedClosing,
                              stream.currentLoc(),
                              "expected '}' to close the resource body");
@@ -385,6 +392,8 @@ namespace lucid::parser
         ResourceDeclAST *node =
             ctx.arena.make<ResourceDeclAST>(name, fields.build());
         node->loc = startLoc;
+        if (bodyHasErrors)
+            node->hasSyntaxError = true;
         return node;
     }
 
@@ -434,7 +443,16 @@ namespace lucid::parser
         BaseAST *defaultValue = nullptr;
         if (stream.match(TokenType::EQUALS))
         {
-            defaultValue = parseValue(stream, ctx);
+            if (!canStartValue(stream.peekType()))
+            {
+                ctx.diag.errorAt(DiagCode::Syntax_ExpectedFieldDefault,
+                                 stream.currentLoc(),
+                                 "expected a value after '='");
+            }
+            else
+            {
+                defaultValue = parseValue(stream, ctx);
+            }
         }
 
         ResourceFieldAST *node =
