@@ -294,18 +294,120 @@ TEST_CASE("buildGraph computes value_order for value nodes",
 // String pool
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("buildGraph interns string arguments into the string pool",
+TEST_CASE("buildGraph interns a string resource field default",
           "[sema][graph-builder]")
 {
     Fixture f;
-    // A hypothetical node that takes a string. The registry does not
-    // declare one; this test uses a string as a resource default.
     auto graph = f.build(
         "resource R { s: string = \"hello\" }\n");
     REQUIRE(graph != nullptr);
-    // Note: resource field string defaults are not yet handled
-    // (deferred to Step 7.6c). This test will need updating then.
-    // For now, it just verifies that the pool is empty (the string
-    // was not added).
-    CHECK(graph->string_pool.empty());
+    REQUIRE(graph->resources.size() == 1);
+
+    auto fields = graph->fieldsOf(graph->resources[0]);
+    REQUIRE(fields.size() == 1);
+    CHECK(fields[0].name == "s");
+    CHECK(fields[0].hasDefault);
+    CHECK(fields[0].defaultValue.kind == Literal::Kind::String);
+
+    // The string's bytes are in the pool.
+    const auto &lit = fields[0].defaultValue;
+    REQUIRE(lit.string.offset + lit.string.length <= graph->string_pool.size());
+    const std::string_view s(graph->string_pool.data() + lit.string.offset,
+                             lit.string.length);
+    CHECK(s == "hello");
+}
+
+TEST_CASE("buildGraph interns multiple string defaults into the pool",
+          "[sema][graph-builder]")
+{
+    Fixture f;
+    auto graph = f.build(
+        "resource R {\n"
+        "  a: string = \"hello\",\n"
+        "  b: string = \"world\"\n"
+        "}\n");
+    REQUIRE(graph != nullptr);
+
+    auto fields = graph->fieldsOf(graph->resources[0]);
+    REQUIRE(fields.size() == 2);
+
+    const auto &a = fields[0].defaultValue;
+    const auto &b = fields[1].defaultValue;
+    CHECK(a.kind == Literal::Kind::String);
+    CHECK(b.kind == Literal::Kind::String);
+
+    const std::string_view sa(graph->string_pool.data() + a.string.offset,
+                              a.string.length);
+    const std::string_view sb(graph->string_pool.data() + b.string.offset,
+                              b.string.length);
+    CHECK(sa == "hello");
+    CHECK(sb == "world");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline-node
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_CASE("buildGraph builds an inline node as a sub-node",
+          "[sema][graph-builder]")
+{
+    Fixture f;
+    auto graph = f.build(
+        "node x = Float32Node(Float32Node(1.5))\n");
+    REQUIRE(graph != nullptr);
+
+    // The outer node is index 0; the inline node is index 1.
+    REQUIRE(graph->nodes.size() == 2);
+
+    // The outer node's argument refers to the inline node.
+    const NodeInstance &outer = graph->nodes[0];
+    auto outerArgs = graph->argsOf(outer);
+    REQUIRE(outerArgs.size() == 1);
+    CHECK(outerArgs[0].kind == Arg::Kind::NodeRef);
+    CHECK(outerArgs[0].node_ref == 1);
+
+    // The inline node's argument is the literal.
+    const NodeInstance &inner = graph->nodes[1];
+    auto innerArgs = graph->argsOf(inner);
+    REQUIRE(innerArgs.size() == 1);
+    CHECK(innerArgs[0].kind == Arg::Kind::Literal);
+    CHECK(innerArgs[0].literal.kind == Literal::Kind::Float32);
+    CHECK(innerArgs[0].literal.f == 1.5);
+
+    // Both nodes are in the value order.
+    CHECK(graph->value_order.size() == 2);
+    // The inner node is before the outer.
+    auto posInner = std::find(graph->value_order.begin(),
+                              graph->value_order.end(), NodeIndex{1});
+    auto posOuter = std::find(graph->value_order.begin(),
+                              graph->value_order.end(), NodeIndex{0});
+    REQUIRE(posInner != graph->value_order.end());
+    REQUIRE(posOuter != graph->value_order.end());
+    CHECK(posInner < posOuter);
+}
+
+TEST_CASE("buildGraph builds deeply nested inline nodes",
+          "[sema][graph-builder]")
+{
+    Fixture f;
+    auto graph = f.build(
+        "node x = Float32Node(Float32Node(Float32Node(1.5)))\n");
+    REQUIRE(graph != nullptr);
+    CHECK(graph->nodes.size() == 3);
+    CHECK(graph->value_order.size() == 3);
+}
+
+TEST_CASE("buildGraph mixes inline nodes with node references",
+          "[sema][graph-builder]")
+{
+    Fixture f;
+    auto graph = f.build(
+        "node a = Float32Node(1.0)\n"
+        "node b = Float32Node(Float32Node(2.0))\n"
+        "node c = Float32Node(a)\n");
+    REQUIRE(graph != nullptr);
+
+    // a: index 0. b: index 1. b's inline child: index 2. c: index 3.
+    REQUIRE(graph->nodes.size() == 4);
+    CHECK(graph->value_order.size() == 4);
 }

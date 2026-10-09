@@ -82,6 +82,8 @@ namespace lucid::sema
         bool isValueNode(NodeIndex idx) const;
         bool isActionNode(NodeIndex idx) const;
 
+        NodeIndex buildInlineNode(const NodeExprAST *expr);
+
         // ─── State ─────────────────────────────────────────────────────────
 
         const SymbolTable &m_symbols;
@@ -233,17 +235,28 @@ namespace lucid::sema
         }
 
         // ─── args ──────────────────────────────────────────────────────────
-        inst.args_offset = static_cast<uint32_t>(m_graph.args.size());
-
+        //
+        // Build the node's arguments into a temporary buffer, then
+        // append them contiguously. Building an argument may
+        // recursively append args to m_graph.args (for inline nodes);
+        // collecting into a buffer first keeps the node's own args
+        // contiguous and correctly offset.
         if (decl->expr != nullptr)
         {
+            std::vector<Arg> tempArgs;
+            tempArgs.reserve(decl->expr->args.size());
             for (BaseAST *arg : decl->expr->args)
             {
-                m_graph.args.push_back(buildArg(arg));
+                tempArgs.push_back(buildArg(arg));
             }
-        }
 
-        inst.args_count = static_cast<uint32_t>(m_graph.args.size()) - inst.args_offset;
+            inst.args_offset = static_cast<uint32_t>(m_graph.args.size());
+            for (Arg &a : tempArgs)
+            {
+                m_graph.args.push_back(std::move(a));
+            }
+            inst.args_count = static_cast<uint32_t>(tempArgs.size());
+        }
 
         // subscribers_offset/count are set in buildSubscribers.
         return inst;
@@ -267,16 +280,38 @@ namespace lucid::sema
                       ? m_diag.stringPool()->lookupView(field->name)
                       : std::string_view{};
 
-        // The field's type.
         if (field->type != nullptr)
         {
             rf.type = m_types.lookup(field->type);
         }
 
-        // The field's default value.
         if (field->defaultValue != nullptr)
         {
-            rf.defaultValue = literalFor(field->defaultValue);
+            // String literals need the pool; other literals come from
+            // the constant map.
+            if (field->defaultValue->kind == ASTKind::LiteralValue)
+            {
+                const auto *lit = field->defaultValue->as<LiteralValueAST>();
+                if (lit->kind == LiteralKind::String)
+                {
+                    const std::string_view s =
+                        m_diag.stringPool()
+                            ? m_diag.stringPool()->lookupView(lit->text)
+                            : std::string_view{};
+                    const uint32_t offset = addStringToPool(s);
+                    rf.defaultValue = Literal::makeString(
+                        offset, static_cast<uint32_t>(s.size()));
+                    rf.hasDefault = true;
+                    return rf;
+                }
+            }
+
+            // Non-string default: look up in the constant map.
+            const Literal *folded = m_constants.lookup(field->defaultValue);
+            if (folded != nullptr)
+            {
+                rf.defaultValue = *folded;
+            }
             rf.hasDefault = true;
         }
 
@@ -392,12 +427,14 @@ namespace lucid::sema
         // ─── Inline node ───────────────────────────────────────────────────
         case ASTKind::InlineNodeValue:
         {
-            // An inline node is a value node embedded as an argument.
-            // For a first version, we treat it as a Nil literal — the
-            // inline node's own subgraph is not built here.
-            //
-            // TODO (Step 7.6c): inline nodes need their own handling.
-            return Arg::makeLiteral(Literal{});
+            const auto *inlineNode = value->as<InlineNodeValueAST>();
+            if (inlineNode->node == nullptr)
+            {
+                return Arg::makeLiteral(Literal{});
+            }
+
+            const NodeIndex idx = buildInlineNode(inlineNode->node);
+            return Arg::makeNodeRef(idx);
         }
 
         default:
@@ -449,6 +486,8 @@ namespace lucid::sema
 
     void GraphBuilder::buildSubscribers(const ModuleAST *module)
     {
+        m_subscribersByNode.resize(m_graph.nodes.size());
+
         // Collect subscribers per target node.
         for (DeclAST *decl : module->decls)
         {
@@ -647,6 +686,63 @@ namespace lucid::sema
         if (typeId >= m_registry.nodeTypes.size())
             return false;
         return m_registry.nodeTypes[typeId].kind == NodeKind::Action;
+    }
+
+    /// Build an inline node's NodeInstance and append it to the
+    /// graph. Returns the index of the newly-appended node.
+    ///
+    /// An inline node's arguments can themselves be inline nodes;
+    /// this function recurses. The recursion is bounded by the
+    /// source's nesting depth.
+    NodeIndex GraphBuilder::buildInlineNode(const NodeExprAST *expr)
+    {
+        NodeInstance inst;
+
+        // ─── type_id and phase ─────────────────────────────────────────
+        if (expr->type != nullptr)
+        {
+            const std::string_view typeName =
+                m_diag.stringPool()
+                    ? m_diag.stringPool()->lookupView(expr->type->name)
+                    : std::string_view{};
+            inst.type_id = nodeTypeIndex(m_registry, typeName);
+
+            const NodeTypeInfo *info = nullptr;
+            for (const auto &ni : m_registry.nodeTypes)
+            {
+                if (ni.name == typeName)
+                {
+                    info = &ni;
+                    break;
+                }
+            }
+            if (info != nullptr)
+            {
+                inst.phase = info->phase;
+            }
+        }
+
+        // ─── args ──────────────────────────────────────────────────────
+        // Same buffering pattern as buildNode: build into a
+        // temporary, then append contiguously.
+        std::vector<Arg> tempArgs;
+        tempArgs.reserve(expr->args.size());
+        for (BaseAST *arg : expr->args)
+        {
+            tempArgs.push_back(buildArg(arg));
+        }
+
+        inst.args_offset = static_cast<uint32_t>(m_graph.args.size());
+        for (Arg &a : tempArgs)
+        {
+            m_graph.args.push_back(std::move(a));
+        }
+        inst.args_count = static_cast<uint32_t>(tempArgs.size());
+
+        // ─── append and return index ───────────────────────────────────
+        const NodeIndex idx = static_cast<NodeIndex>(m_graph.nodes.size());
+        m_graph.nodes.push_back(inst);
+        return idx;
     }
 
     // ─── Public entry point ───────────────────────────────────────────────────
