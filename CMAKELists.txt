@@ -193,6 +193,7 @@ add_library(lucid_sema STATIC
     sema/src/sema/Resolver.cpp
     sema/src/sema/TypeChecker.cpp
     sema/src/sema/Sema.cpp
+    sema/src/sema/GraphBuilder.cpp
 )
 
 target_include_directories(lucid_sema

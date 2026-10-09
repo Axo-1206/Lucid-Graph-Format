@@ -6,6 +6,7 @@
 #include "Resolver.hpp"
 #include "SymbolCollector.hpp"
 #include "TypeChecker.hpp"
+#include "GraphBuilder.hpp"
 
 #include "core/diagnostics/DiagCode.hpp"
 #include "core/memory/ASTArena.hpp"
@@ -58,14 +59,21 @@ namespace lucid::sema
             return result;
         }
 
-        // ─── Pass 4+ not implemented ───────────────────────────────────────
-        diag.errorAt(DiagCode::Internal_NotImplemented,
-                     SourceLocation{1, 1},
-                     "sema: passes after type checking "
-                     "are not yet implemented");
+        // ─── Pass 4: graph construction ────────────────────────────────────
+        std::unique_ptr<Graph> graph = buildGraph(
+            module, symbols, resolutions, constants, types,
+            registry, pool, diag);
 
-        result.ok = false;
-        result.graph = nullptr;
+        if (diag.hasErrors())
+        {
+            result.ok = false;
+            result.graph = nullptr;
+            result.diagnostics = diag.all();
+            return result;
+        }
+
+        result.ok = true;
+        result.graph = std::move(graph);
         result.diagnostics = diag.all();
         return result;
     }

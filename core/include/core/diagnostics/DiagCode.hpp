@@ -225,6 +225,7 @@ namespace lucid::diag
         Type_InvalidBinding = 4006,     // binding mismatch between value and target
         Type_InvalidNodeArg = 4007,     // argument not a valid value
         Type_InvalidFieldAccess = 4008, // base is not field-accessible
+        Type_Cycle = 4009,              // A cycle exists among the value nodes.
 
         Value_DuplicateFieldDefault = 4101, // resource with two defaults
 
