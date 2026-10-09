@@ -7,6 +7,7 @@
 #include "SymbolCollector.hpp"
 #include "TypeChecker.hpp"
 #include "GraphBuilder.hpp"
+#include "DeadCodeChecker.hpp"
 
 #include "core/diagnostics/DiagCode.hpp"
 #include "core/memory/ASTArena.hpp"
@@ -71,6 +72,9 @@ namespace lucid::sema
             result.diagnostics = diag.all();
             return result;
         }
+
+        // ─── Pass 5: dead-code detection ───────────────────────────────────
+        checkDeadCode(module, resolutions, registry, diag);
 
         result.ok = true;
         result.graph = std::move(graph);

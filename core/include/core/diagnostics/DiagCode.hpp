@@ -307,7 +307,7 @@ namespace lucid::diag
         Warn_UnusedResource = 8002,
         Warn_UnusedNode = 8003, // value node never referenced
         Warn_UnusedEnum = 8004,
-        Warn_DeadNode = 8005, // action node with no trigger
+        Warn_DeadNode = 8005, // value node not referenced by any other node
         Warn_EmptyResource = 8006,
         Warn_TrailingComma = 8007, // stylistic; formatter normalizes
 
