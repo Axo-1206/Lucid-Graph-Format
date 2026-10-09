@@ -155,8 +155,9 @@ namespace
             SymbolTable symbols;
             collectSymbols(module, symbols, diag);
 
+            ModuleTable moduleTable;
             ResolutionMap resolutions;
-            resolveNames(module, symbols, resolutions, diag);
+            resolveNames(module, symbols, moduleTable, resolutions, diag);
 
             TypeMap types;
             ConstantValueMap constants;

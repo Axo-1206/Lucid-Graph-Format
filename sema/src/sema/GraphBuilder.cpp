@@ -44,18 +44,14 @@ namespace lucid::sema
     class GraphBuilder
     {
     public:
-        GraphBuilder(const SymbolTable &symbols,
-                     const ResolutionMap &resolutions,
-                     const ConstantValueMap &constants,
-                     const TypeMap &types,
-                     const Registry &registry,
+        GraphBuilder(const Registry &registry,
                      StringPool &pool,
                      DiagnosticEngine &diag)
-            : m_symbols(symbols), m_resolutions(resolutions), m_constants(constants), m_types(types), m_registry(registry), m_pool(pool), m_diag(diag)
+            : m_registry(registry), m_pool(pool), m_diag(diag)
         {
         }
 
-        std::unique_ptr<Graph> build(const ModuleAST *module);
+        std::unique_ptr<Graph> build(const std::vector<ModuleContext> &modules);
 
     private:
         // ─── Phase A: registration ─────────────────────────────────────────
@@ -72,8 +68,8 @@ namespace lucid::sema
 
         // ─── Phase C: order and subscribers ────────────────────────────────
         void buildSubscribers(const ModuleAST *module);
-        void buildPhaseOrder(const ModuleAST *module);
-        void buildValueOrder(const ModuleAST *module);
+        void buildPhaseOrder();
+        void buildValueOrder();
 
         // ─── Helpers ───────────────────────────────────────────────────────
         Literal literalFor(const BaseAST *value) const;
@@ -84,19 +80,21 @@ namespace lucid::sema
 
         NodeIndex buildInlineNode(const NodeExprAST *expr);
 
-        // ─── State ─────────────────────────────────────────────────────────
+        // ─── Per-module context (set at the start of each module's phase) ──
+        // These are reset before each phase-B and phase-C iteration.
+        const SymbolTable      *m_symbols     = nullptr;
+        const ResolutionMap    *m_resolutions = nullptr;
+        const ConstantValueMap *m_constants   = nullptr;
+        const TypeMap          *m_types       = nullptr;
 
-        const SymbolTable &m_symbols;
-        const ResolutionMap &m_resolutions;
-        const ConstantValueMap &m_constants;
-        const TypeMap &m_types;
-        const Registry &m_registry;
-        StringPool &m_pool;
+        // ─── Shared state ──────────────────────────────────────────────────
+        const Registry   &m_registry;
+        StringPool       &m_pool;
         DiagnosticEngine &m_diag;
 
         Graph m_graph;
 
-        std::unordered_map<const NodeDeclAST *, NodeIndex> m_nodeIndex;
+        std::unordered_map<const NodeDeclAST *, NodeIndex>    m_nodeIndex;
         std::unordered_map<const ResourceDeclAST *, uint32_t> m_resourceIndex;
         std::unordered_map<const ResourceFieldAST *, uint32_t> m_fieldIndex;
 
@@ -111,18 +109,38 @@ namespace lucid::sema
 
     // ─── build ────────────────────────────────────────────────────────────────
 
-    std::unique_ptr<Graph> GraphBuilder::build(const ModuleAST *module)
+    std::unique_ptr<Graph> GraphBuilder::build(
+        const std::vector<ModuleContext> &modules)
     {
-        if (module == nullptr)
+        // ─── Phase A: register every module's nodes and resources ──────────
+        for (const ModuleContext &ctx : modules)
         {
-            return std::make_unique<Graph>();
+            registerDecls(ctx.module);
         }
 
-        registerDecls(module);
-        buildDecls(module);
-        buildSubscribers(module);
-        buildPhaseOrder(module);
-        buildValueOrder(module);
+        // ─── Phase B: build every module's nodes and resources ─────────────
+        for (const ModuleContext &ctx : modules)
+        {
+            m_symbols     = ctx.symbols;
+            m_resolutions = ctx.resolutions;
+            m_constants   = ctx.constants;
+            m_types       = ctx.types;
+            buildDecls(ctx.module);
+        }
+
+        // ─── Phase C: subscribers ──────────────────────────────────────────
+        for (const ModuleContext &ctx : modules)
+        {
+            m_symbols     = ctx.symbols;
+            m_resolutions = ctx.resolutions;
+            m_constants   = ctx.constants;
+            m_types       = ctx.types;
+            buildSubscribers(ctx.module);
+        }
+
+        // phase_order and value_order are global; no module context needed.
+        buildPhaseOrder();
+        buildValueOrder();
 
         return std::make_unique<Graph>(std::move(m_graph));
     }
@@ -131,8 +149,8 @@ namespace lucid::sema
 
     void GraphBuilder::registerDecls(const ModuleAST *module)
     {
-        uint32_t nextResourceIndex = 0;
-        uint32_t nextFieldIndex = 0;
+        if (module == nullptr)
+            return;
 
         for (DeclAST *decl : module->decls)
         {
@@ -152,13 +170,17 @@ namespace lucid::sema
             if (decl->kind == ASTKind::ResourceDecl)
             {
                 auto *resDecl = decl->as<ResourceDeclAST>();
-                m_resourceIndex[resDecl] = nextResourceIndex++;
+                const uint32_t resIdx =
+                    static_cast<uint32_t>(m_resourceIndex.size());
+                m_resourceIndex[resDecl] = resIdx;
 
                 for (ResourceFieldAST *field : resDecl->fields)
                 {
                     if (field != nullptr)
                     {
-                        m_fieldIndex[field] = nextFieldIndex++;
+                        const uint32_t fieldIdx =
+                            static_cast<uint32_t>(m_fieldIndex.size());
+                        m_fieldIndex[field] = fieldIdx;
                     }
                 }
                 continue;
@@ -282,7 +304,7 @@ namespace lucid::sema
 
         if (field->type != nullptr)
         {
-            rf.type = m_types.lookup(field->type);
+            rf.type = m_types->lookup(field->type);
         }
 
         if (field->defaultValue != nullptr)
@@ -307,7 +329,7 @@ namespace lucid::sema
             }
 
             // Non-string default: look up in the constant map.
-            const Literal *folded = m_constants.lookup(field->defaultValue);
+            const Literal *folded = m_constants->lookup(field->defaultValue);
             if (folded != nullptr)
             {
                 rf.defaultValue = *folded;
@@ -349,7 +371,7 @@ namespace lucid::sema
             }
 
             // Other literals are recorded in the constant map.
-            const Literal *folded = m_constants.lookup(value);
+            const Literal *folded = m_constants->lookup(value);
             if (folded != nullptr)
             {
                 return Arg::makeLiteral(*folded);
@@ -360,7 +382,7 @@ namespace lucid::sema
         // ─── Identifier (a reference to another node) ──────────────────────
         case ASTKind::IdentifierValue:
         {
-            const BaseAST *target = m_resolutions.lookup(value);
+            const BaseAST *target = m_resolutions->lookup(value);
             if (target != nullptr && target->kind == ASTKind::NodeDecl)
             {
                 const auto *targetDecl = target->as<NodeDeclAST>();
@@ -379,7 +401,7 @@ namespace lucid::sema
         // ─── Field access (a reference to a resource field, or an enum member) ──
         case ASTKind::FieldAccessValue:
         {
-            const BaseAST *target = m_resolutions.lookup(value);
+            const BaseAST *target = m_resolutions->lookup(value);
             if (target != nullptr && target->kind == ASTKind::ResourceDecl)
             {
                 const auto *resDecl = target->as<ResourceDeclAST>();
@@ -411,7 +433,7 @@ namespace lucid::sema
             {
                 // An enum member reference. Its value is in the
                 // constant map.
-                const Literal *folded = m_constants.lookup(value);
+                const Literal *folded = m_constants->lookup(value);
                 if (folded != nullptr)
                 {
                     return Arg::makeLiteral(*folded);
@@ -463,7 +485,7 @@ namespace lucid::sema
             }
         }
 
-        const Literal *folded = m_constants.lookup(value);
+        const Literal *folded = m_constants->lookup(value);
         if (folded != nullptr)
         {
             return *folded;
@@ -501,7 +523,7 @@ namespace lucid::sema
 
             for (InternedString triggerName : nodeDecl->triggers)
             {
-                const Symbol *sym = m_symbols.find(triggerName);
+                const Symbol *sym = m_symbols->find(triggerName);
                 if (sym == nullptr || sym->kind != SymbolKind::Node)
                 {
                     continue;
@@ -535,9 +557,8 @@ namespace lucid::sema
 
     // ─── Phase C: phase order ─────────────────────────────────────────────────
 
-    void GraphBuilder::buildPhaseOrder(const ModuleAST *module)
+    void GraphBuilder::buildPhaseOrder()
     {
-        (void)module;
 
         // Collect action nodes with their phase.
         struct ActionOrder
@@ -575,9 +596,8 @@ namespace lucid::sema
 
     // ─── Phase C: value order (topological sort) ──────────────────────────────
 
-    void GraphBuilder::buildValueOrder(const ModuleAST *module)
+    void GraphBuilder::buildValueOrder()
     {
-        (void)module;
 
         const size_t n = m_graph.nodes.size();
 
@@ -745,7 +765,17 @@ namespace lucid::sema
         return idx;
     }
 
-    // ─── Public entry point ───────────────────────────────────────────────────
+    // ─── Public entry points ──────────────────────────────────────────────────
+
+    std::unique_ptr<Graph> buildGraphFromModules(
+        const std::vector<ModuleContext> &modules,
+        const Registry &registry,
+        StringPool &pool,
+        DiagnosticEngine &diag)
+    {
+        GraphBuilder builder(registry, pool, diag);
+        return builder.build(modules);
+    }
 
     std::unique_ptr<Graph> buildGraph(const ModuleAST *module,
                                       const SymbolTable &symbols,
@@ -756,9 +786,16 @@ namespace lucid::sema
                                       StringPool &pool,
                                       DiagnosticEngine &diag)
     {
-        GraphBuilder builder(symbols, resolutions, constants, types,
-                             registry, pool, diag);
-        return builder.build(module);
+        // Wrap the single-module inputs into a ModuleContext and delegate.
+        // const_cast is safe: the graph builder does not mutate the AST.
+        ModuleContext ctx{
+            const_cast<ModuleAST *>(module),
+            &symbols,
+            &resolutions,
+            &constants,
+            &types,
+        };
+        return buildGraphFromModules({ctx}, registry, pool, diag);
     }
 
 } // namespace lucid::sema

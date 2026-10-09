@@ -54,9 +54,11 @@ namespace lucid::sema
     {
     public:
         Resolver(const SymbolTable &symbols,
+                 const ModuleTable &moduleTable,
                  ResolutionMap &resolutions,
                  lucid::diag::DiagnosticEngine &diag)
-            : m_symbols(symbols), m_resolutions(resolutions), m_diag(diag)
+            : m_symbols(symbols), m_moduleTable(moduleTable),
+              m_resolutions(resolutions), m_diag(diag)
         {
         }
 
@@ -96,6 +98,7 @@ namespace lucid::sema
         // ─── State ─────────────────────────────────────────────────────────
 
         const SymbolTable &m_symbols;
+        const ModuleTable &m_moduleTable;
         ResolutionMap &m_resolutions;
         lucid::diag::DiagnosticEngine &m_diag;
     };
@@ -364,26 +367,48 @@ namespace lucid::sema
         if (type == nullptr)
             return;
 
-        // A qualified type (`core::Key`) resolves through an import.
-        // The resolver does not load imports; that is a later pass's
-        // job. Record a deferred resolution for any qualified type.
+        // ─── Qualified: `Module::Type` ─────────────────────────────────────
         if (type->isQualified())
         {
-            m_resolutions.record(type, nullptr);
+            const SymbolTable *targetModule =
+                m_moduleTable.find(type->qualifier);
+
+            if (targetModule == nullptr)
+            {
+                m_diag.error(diag::DiagCode::Name_UndefinedModule, type,
+                             "no module named '",
+                             m_diag.stringPool()
+                                 ? m_diag.stringPool()->lookupView(type->qualifier)
+                                 : std::string_view{"<unknown>"},
+                             "'");
+                m_resolutions.record(type, nullptr);
+                return;
+            }
+
+            const Symbol *symbol = targetModule->find(type->name);
+            if (symbol != nullptr)
+            {
+                m_resolutions.record(type, symbol->decl);
+            }
+            else
+            {
+                m_diag.error(diag::DiagCode::Name_UndefinedType, type,
+                             "no type named '",
+                             m_diag.stringPool()
+                                 ? m_diag.stringPool()->lookupView(type->name)
+                                 : std::string_view{"<unknown>"},
+                             "' in module '",
+                             m_diag.stringPool()
+                                 ? m_diag.stringPool()->lookupView(type->qualifier)
+                                 : std::string_view{"<unknown>"},
+                             "'");
+                m_resolutions.record(type, nullptr);
+            }
             return;
         }
 
-        // An unqualified type name might be:
-        //   - A primitive: `float32`, `int32`, etc.
-        //   - A handle: `BodyRef`, `TextureRef`, etc.
-        //   - An enum: `Key`, `Direction`.
-        //   - A resource: a resource used as a type in a field.
-        //
-        // Primitives and handles are registry concerns; Pass 3 checks
-        // them against the registry. Enums and resources are module
-        // symbols; the resolver records their resolution.
+        // ─── Unqualified: existing logic ───────────────────────────────────
         const Symbol *symbol = m_symbols.find(type->name);
-
         if (symbol != nullptr &&
             (symbol->kind == SymbolKind::Enum ||
              symbol->kind == SymbolKind::Resource))
@@ -392,9 +417,6 @@ namespace lucid::sema
         }
         else
         {
-            // Not a module symbol. Might be a primitive or handle
-            // (Pass 3), or a name that does not resolve at all.
-            // Record a deferred (null) resolution.
             m_resolutions.record(type, nullptr);
         }
     }
@@ -403,10 +425,11 @@ namespace lucid::sema
 
     void resolveNames(const ModuleAST *module,
                       const SymbolTable &symbols,
+                      const ModuleTable &moduleTable,
                       ResolutionMap &resolutions,
                       lucid::diag::DiagnosticEngine &diag)
     {
-        Resolver resolver(symbols, resolutions, diag);
+        Resolver resolver(symbols, moduleTable, resolutions, diag);
         resolver.resolveModule(module);
     }
 

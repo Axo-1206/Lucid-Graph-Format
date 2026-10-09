@@ -158,15 +158,37 @@ The qualifier is optional. It is useful when a bare name would collide with anot
 attribute_list ::= { '@' IDENTIFIER }
 ```
 
-An attribute list is a sequence of `@name` prefixes. The only recognized attribute is `@export`. An attribute list may precede any of `import`, `enum`, `resource`, or `node`.
+An attribute list is a sequence of `@name` prefixes. The only recognized
+attribute is `@export`. An attribute list may precede any of `import`,
+`enum`, `resource`, or `node`.
 
-The parser accepts any identifier after `@` and any number of attributes on any declaration. Sema enforces both the set of recognized attributes and the declarations they may appear on:
+The parser accepts any identifier after `@` and any number of attributes on
+any declaration. Sema enforces both the set of recognized attributes and
+the declarations they may appear on:
 
-- `@export` is meaningful on `resource` only. On `import`, `enum`, or `node` it is an error (`Attr_ExportOnImport`, `Attr_ExportOnEnum`, `Attr_ExportOnNode`).
+- `@export` is legal on `enum`, `resource`, and `node`. A declaration
+  marked `@export` is visible to modules that import this one, by its
+  bare name and through the module's `::` qualifier.
+
+- `@export` is not legal on `import`. An `import` binds names into the
+  current module's scope; it is not a declaration another module can
+  see. `@export` on an import is an error (`Attr_ExportOnImport`).
+
 - An unrecognized attribute is an error (`Attr_Unknown`).
-- The same attribute twice on one declaration is an error (`Attr_Duplicate`).
 
-`@deprecate` is **not** part of the format. A future need for deprecation is handled by a special comment convention (not defined here) or by a future attribute. The grammar reserves the syntactic space; no attribute beyond `@export` is recognized today.
+- The same attribute twice on one declaration is an error
+  (`Attr_Duplicate`).
+
+`@deprecate` is **not** part of the format. A future need for deprecation
+is handled by a special comment convention (not defined here) or by a
+future attribute. The grammar reserves the syntactic space; no attribute
+beyond `@export` is recognized today.
+
+**Visibility and the module system.** A declaration without `@export` is
+visible only inside its own module. A declaration with `@export` is
+visible to any module that imports this one. `@export` controls
+visibility; it does not affect the graph, the engine's runtime, or the
+registry. It is a module-system attribute.
 
 ### 2.4 Enums
 

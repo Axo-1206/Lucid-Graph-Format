@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "sema/ModuleTable.hpp"
 #include "sema/Resolver.hpp"
 #include "sema/SymbolCollector.hpp"
 
@@ -28,6 +29,7 @@ using lucid::parser::parseFile;
 using lucid::parser::ParserContext;
 using lucid::parser::TokenStream;
 using lucid::sema::collectSymbols;
+using lucid::sema::ModuleTable;
 using lucid::sema::ResolutionMap;
 using lucid::sema::resolveNames;
 using lucid::sema::SymbolTable;
@@ -55,6 +57,7 @@ namespace
             ModuleAST *module;
             SymbolTable symbols;
             ResolutionMap resolutions;
+            ModuleTable moduleTable;
         };
 
         Run run(std::string_view source)
@@ -65,7 +68,7 @@ namespace
             Run r;
             r.module = module;
             collectSymbols(module, r.symbols, diag);
-            resolveNames(module, r.symbols, r.resolutions, diag);
+            resolveNames(module, r.symbols, r.moduleTable, r.resolutions, diag);
             return r;
         }
     };

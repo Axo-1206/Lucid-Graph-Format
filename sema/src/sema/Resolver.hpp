@@ -25,6 +25,7 @@
 #include "core/memory/StringPool.hpp"
 #include "sema/ResolutionMap.hpp"
 #include "sema/SymbolTable.hpp"
+#include "sema/ModuleTable.hpp"
 
 namespace lucid::sema
 {
@@ -46,6 +47,7 @@ namespace lucid::sema
     ///     resolved to any local symbol.
     void resolveNames(const ModuleAST *module,
                       const SymbolTable &symbols,
+                      const ModuleTable &moduleTable,
                       ResolutionMap &resolutions,
                       lucid::diag::DiagnosticEngine &diag);
 

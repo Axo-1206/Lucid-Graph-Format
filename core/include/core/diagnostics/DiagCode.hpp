@@ -233,30 +233,18 @@ namespace lucid::diag
         // ATTRIBUTES (5000-5099)
         // ═════════════════════════════════════════════════════════════════════════
         //
-        // The grammar allows an attribute list on any of the four top-level
-        // declarations (import, enum, resource, node). The parser accepts
-        // any @name in any of those positions. Sema enforces two rules:
-        //
-        //   1. The set of recognized attributes is exactly { @export }.
-        //      Any other @name is Attr_Unknown.
-        //
-        //   2. @export is meaningful on `resource` only. Syntactically it
-        //      may precede import, enum, or node; semantically it is an
-        //      error on any of them (Attr_ExportOnImport,
-        //      Attr_ExportOnEnum, Attr_ExportOnNode).
-        //
-        // @deprecate is not part of the format. A future deprecation
-        // mechanism is handled by a special comment convention or by a
-        // future attribute, deferred until needed.
+        // The new grammar has exactly one recognized attribute: @export.
+        // @export is legal on enum, resource, and node declarations. It
+        // is not legal on an import (an import binds names into the
+        // current module; it has no declaration another module can see).
+        // Any other @name is an unknown attribute.
 
         Attr_Unknown = 5001,          // @name not recognized
         Attr_ExportOnImport = 5002,   // @export on import_decl
-        Attr_ExportOnEnum = 5003,     // @export on enum_decl
-        Attr_ExportOnNode = 5004,     // @export on node_decl
-        Attr_ExportOnField = 5005,    // @export inside a declaration body
-        Attr_Duplicate = 5006,        // @export twice on one decl
-        Attr_ArgCountMismatch = 5007, // attribute takes no args
-        Attr_InvalidArgValue = 5008,  // (reserved for future attributes)
+        Attr_ExportOnField = 5003,    // @export inside a declaration body
+        Attr_Duplicate = 5004,        // @export twice on one decl
+        Attr_ArgCountMismatch = 5005, // attribute takes no args
+        Attr_InvalidArgValue = 5006,  // (reserved for future attributes)
 
         // ═════════════════════════════════════════════════════════════════════════
         // IMPORTS (5100-5199)

@@ -172,6 +172,8 @@ add_executable(test_sema
     sema/test_constant_value_map.cpp
     sema/test_graph_builder.cpp
     sema/test_dead_code.cpp
+    sema/test_import_resolver.cpp
+    sema/test_multi_module.cpp
 )
 
 target_link_libraries(test_sema PRIVATE

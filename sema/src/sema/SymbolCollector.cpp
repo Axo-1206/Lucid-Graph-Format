@@ -3,38 +3,10 @@
 /// @brief Implementation of Pass 1's symbol collector.
 
 #include "SymbolCollector.hpp"
+#include "SymbolKindOf.hpp"
 
 namespace lucid::sema
 {
-
-    namespace
-    {
-
-        /// Map a declaration kind to a symbol kind. Returns false if the
-        /// declaration is not a symbol (e.g., an UnknownAST from a parse
-        /// error).
-        bool symbolKindOf(ASTKind kind, SymbolKind &out) noexcept
-        {
-            switch (kind)
-            {
-            case ASTKind::ImportDecl:
-                out = SymbolKind::Import;
-                return true;
-            case ASTKind::EnumDecl:
-                out = SymbolKind::Enum;
-                return true;
-            case ASTKind::ResourceDecl:
-                out = SymbolKind::Resource;
-                return true;
-            case ASTKind::NodeDecl:
-                out = SymbolKind::Node;
-                return true;
-            default:
-                return false;
-            }
-        }
-
-    } // namespace
 
     void collectSymbols(const ModuleAST *module,
                         SymbolTable &table,
