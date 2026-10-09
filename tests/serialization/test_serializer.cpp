@@ -350,6 +350,7 @@ TEST_CASE("serialize: literal string offsets are preserved in the pool",
 
     sema::Graph g;
     g.string_pool = {'h', 'e', 'l', 'l', 'o'}; // "hello"
+    g.literal_pool_size = 5;
 
     sema::Literal lit;
     lit.kind = sema::Literal::Kind::String;

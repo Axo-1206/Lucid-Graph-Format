@@ -170,6 +170,36 @@ namespace lucid::sema
         std::vector<NodeIndex> value_order;
         std::vector<char> string_pool;
 
+        /// The number of bytes at the start of `string_pool` that are
+        /// the graph's own string literals.
+        ///
+        /// ─── The invariant ────────────────────────────────────────────
+        /// Every `Literal::String` in this graph has an (offset, length)
+        /// whose end (`offset + length`) is at most `literal_pool_size`.
+        /// The bytes before `literal_pool_size` are the graph's
+        /// literals; nothing else lives there.
+        ///
+        /// ─── Who sets it ──────────────────────────────────────────────
+        /// `GraphBuilder::build` sets it after the string pool is fully
+        /// populated. A graph produced by `compile` always has it set
+        /// correctly.
+        ///
+        /// ─── Who reads it ─────────────────────────────────────────────
+        /// `serialize` reads it to know where the graph's literal
+        /// prefix ends. Bytes after the prefix are names that
+        /// serialization interns; on the next `serialize` of the same
+        /// graph, those names are appended again, starting from the
+        /// prefix.
+        ///
+        /// ─── Hand-built graphs ────────────────────────────────────────
+        /// A graph constructed by hand (in a test, in a tool) must set
+        /// this field to the maximum extent of its string literals. If
+        /// the graph has no string literals, the correct value is 0.
+        /// Forgetting it produces a file whose string pool does not
+        /// contain the graph's literal bytes, which corrupts any
+        /// literal's text on the round-trip.
+        uint32_t literal_pool_size = 0;
+
         uint64_t registry_fingerprint = 0;
 
         // ─── Convenience accessors ────────────────────────────────────────

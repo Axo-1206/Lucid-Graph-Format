@@ -212,7 +212,9 @@ namespace lucid::serialization
         //
         // The graph is not modified.
 
-        FileStringPool pool(graph.string_pool);
+        FileStringPool pool(std::vector<char>(
+            graph.string_pool.begin(),
+            graph.string_pool.begin() + graph.literal_pool_size));
 
         // nameOffsets: name -> offset in the file's pool. Filled by
         // the helper below; kept here because the same name appears

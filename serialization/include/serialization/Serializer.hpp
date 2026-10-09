@@ -13,9 +13,19 @@
 /// Validation is the deserializer's job, at load time.
 ///
 /// ─── The string pool ──────────────────────────────────────────────────────
-/// `serialize` augments the graph's `string_pool` on its own internal
-/// copy of the offset table. The graph itself is not modified; the
-/// bytes written to the file include every string the file needs.
+/// `serialize` builds the file's string pool from two sources, in
+/// order:
+///
+///   1. The graph's literal prefix: `graph.string_pool[0 ..
+///      graph.literal_pool_size]`. These bytes are copied first, so
+///      every `Literal::String`'s (offset, length) remains valid in
+///      the file unchanged.
+///   2. The graph's names: resource names, resource-field names, and
+///      TypeId names. Each is interned once, after the prefix.
+///
+/// The graph itself is not modified. `Graph::literal_pool_size` is the
+/// contract that makes step 1 correct; see its doc comment in
+/// `sema/Graph.hpp`.
 
 #pragma once
 

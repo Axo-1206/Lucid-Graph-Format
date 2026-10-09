@@ -203,6 +203,8 @@ add_test(NAME sema COMMAND test_sema)
 
 add_executable(test_serialization
     serialization/test_serializer.cpp
+    serialization/test_roundtrip.cpp
+    serialization/test_deserialize_errors.cpp
 )
 
 target_link_libraries(test_serialization PRIVATE

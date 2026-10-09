@@ -17,6 +17,24 @@
 /// the registry fingerprint; the loader refuses a file whose version it
 /// does not know or whose fingerprint does not match the current
 /// registry.
+///
+/// ─── The string pool, on disk ─────────────────────────────────────────────
+/// The String Pool section's bytes are the concatenation of two
+/// regions, in order:
+///
+///   1. The graph's string literals. Their offsets in the file are
+///      identical to their offsets in the in-memory graph, because
+///      the graph's literal prefix is copied verbatim. Every
+///      Literal::String's (offset, length) therefore needs no
+///      remapping on write.
+///   2. The graph's names — resource names, resource-field names, and
+///      TypeId names. Each distinct name is interned once. Its
+///      offset is recorded in the Resources and Resource Fields
+///      sections.
+///
+/// The boundary between the two regions is not stored in the file.
+/// The loader recovers it from the literals' extents (see
+/// `Graph::literal_pool_size` in `sema/Graph.hpp`).
 
 #pragma once
 

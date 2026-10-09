@@ -148,6 +148,13 @@ namespace lucid::sema
         // registry and refuses a mismatch.
         m_graph.registry_fingerprint = computeRegistryFingerprint(m_registry);
 
+        // The string pool now holds every literal the graph uses, and
+        // nothing else: `addStringToPool` is the only writer. The
+        // literal prefix is therefore the whole pool. `serialize`
+        // starts from this prefix and appends names; see
+        // Graph::literal_pool_size.
+        m_graph.literal_pool_size = static_cast<uint32_t>(m_graph.string_pool.size());
+
         return std::make_unique<Graph>(std::move(m_graph));
     }
 

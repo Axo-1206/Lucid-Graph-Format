@@ -221,6 +221,7 @@ endif()
 
 add_library(lucid_serialization STATIC
     serialization/src/serialization/Serializer.cpp
+    serialization/src/serialization/Deserializer.cpp
 )
 
 target_include_directories(lucid_serialization

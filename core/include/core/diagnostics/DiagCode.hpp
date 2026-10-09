@@ -82,6 +82,7 @@ namespace lucid::diag
         Value,
         Attribute,
         Import,
+        Serialization,
         Internal, // free-text notes and hints (code 0)
         Warning,
         Unknown,
@@ -105,6 +106,8 @@ namespace lucid::diag
             return "Attribute";
         case DiagCategory::Import:
             return "Import";
+        case DiagCategory::Serialization:
+            return "Serialization";
         case DiagCategory::Internal:
             return "Internal";
         case DiagCategory::Warning:
@@ -276,6 +279,46 @@ namespace lucid::diag
         Trigger_ActionWithoutOn = 5302,
 
         // ═════════════════════════════════════════════════════════════════════════
+        // SERIALIZATION (6000-6099)
+        // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Read and write errors for the .lucgraph binary format. These
+        // describe a file, not source code. A Ser_* diagnostic means the
+        // bytes the loader was handed are not a valid .lucgraph, or are
+        // a valid .lucgraph compiled against a different registry. The
+        // audience is the tool that produced the file (a build script,
+        // a packaging step), not the compiler team.
+        //
+        // The writer (serialize) does not report diagnostics; it writes
+        // whatever graph it is given. Every code here is a reader
+        // (deserialize) error.
+
+        // ─── File-shape errors (6000-6019) ────────────────────────────────
+        // The file is not a .lucgraph, or its header is malformed.
+
+        Ser_TooSmall = 6001,         // file is smaller than the header
+        Ser_BadMagic = 6002,         // first four bytes are not "LUGR"
+        Ser_BadVersion = 6003,       // format_version is not one we know
+        Ser_BadSectionCount = 6004,  // section_count is not the expected count
+        Ser_MissingSection = 6005,   // a required section is absent
+        Ser_TruncatedSection = 6006, // a section extends past the file's end
+
+        // ─── Content errors (6020-6039) ───────────────────────────────────
+        // The file's shape is valid, but a section's contents are not.
+
+        Ser_BadStringRef = 6021,       // (offset, length) overruns the pool
+        Ser_BadTypeKind = 6022,        // a TypeId::Kind byte is not one we know
+        Ser_UnknownArgKind = 6023,     // an Arg::Kind byte is not one we know
+        Ser_UnknownSectionKind = 6024, // a section ID is not one we know
+        Ser_UnknownLiteralKind = 6025, // a Literal::Kind byte is not one we know
+        Ser_TrailingBytes = 6026,      // section sizes do not fill the file
+
+        // ─── Registry mismatches (6040-6059) ──────────────────────────────
+        // The file is a valid .lucgraph, but not for the registry in hand.
+
+        Ser_FingerprintMismatch = 6041, // the file's registry differs from ours
+
+        // ═════════════════════════════════════════════════════════════════════════
         // INTERNAL / PANIC (7000-7099)
         // ═════════════════════════════════════════════════════════════════════════
         //
@@ -328,6 +371,10 @@ namespace lucid::diag
             return DiagCategory::Attribute;
         if (v < 5200)
             return DiagCategory::Import;
+        if (v < 5400)
+            return DiagCategory::Internal; // trigger rules currently land here
+        if (v < 6100)
+            return DiagCategory::Serialization;
         if (v < 8000)
             return DiagCategory::Internal;
         if (v < 9000)
