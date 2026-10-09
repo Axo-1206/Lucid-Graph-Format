@@ -90,8 +90,10 @@ Lucid-Graph-Format/
 │
 ├── sema/                              ← semantic analysis
 │   ├── include/sema/
+│   │   ├── ConstantValueMap.hpp
 │   │   ├── Graph.hpp
 │   │   ├── Literal.hpp
+│   │   ├── ModuleTable.hpp
 │   │   ├── NodeKind.hpp
 │   │   ├── Primitives.hpp
 │   │   ├── Registry.hpp
@@ -99,29 +101,47 @@ Lucid-Graph-Format/
 │   │   ├── Sema.hpp
 │   │   ├── SymbolTable.hpp
 │   │   ├── TypeId.hpp
-│   │   └── TypeMap.hpp
+│   │   ├── TypeMap.hpp
+│   │   └── dump/
+│   │       └── GraphDumper.hpp
 │   │
 │   └── src/sema/
+│       ├── AttributeChecker.hpp
+│       ├── AttributeChecker.cpp
+│       ├── DeadCodeChecker.hpp
+│       ├── DeadCodeChecker.cpp
+│       ├── DeclHelpers.hpp
+│       ├── GraphBuilder.hpp
+│       ├── GraphBuilder.cpp
+│       ├── ImportResolver.hpp
+│       ├── ImportResolver.cpp
 │       ├── Registry.cpp
 │       ├── Resolver.hpp
 │       ├── Resolver.cpp
 │       ├── Sema.cpp
 │       ├── SymbolCollector.hpp
 │       ├── SymbolCollector.cpp
+│       ├── SymbolKindOf.hpp
 │       ├── SymbolTable.cpp
 │       ├── TypeChecker.hpp
-│       └── TypeChecker.cpp
+│       ├── TypeChecker.cpp
+│       └── dump/
+│           └── GraphDumper.cpp
 │
 ├── cli/                               ← command-line interface
 │   ├── include/cli/
 │   │   ├── CLIOptions.hpp
+│   │   ├── Version.hpp
 │   │   └── commands/
+│   │       ├── Check.hpp
 │   │       └── Format.hpp
 │   │
 │   └── src/cli/
+│       ├── CheckMain.cpp
 │       ├── CLIOptions.cpp
 │       ├── Main.cpp
 │       └── commands/
+│           ├── Check.cpp
 │           └── Format.cpp
 │
 ├── src/
