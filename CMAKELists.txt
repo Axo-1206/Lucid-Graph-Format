@@ -245,8 +245,10 @@ endif()
 
 add_library(lucid_cli STATIC
     cli/src/cli/CLIOptions.cpp
+    cli/src/cli/Registry.cpp
     cli/src/cli/commands/Format.cpp
     cli/src/cli/commands/Check.cpp
+    cli/src/cli/commands/Compile.cpp
 )
 
 target_include_directories(lucid_cli PUBLIC
@@ -258,6 +260,7 @@ target_link_libraries(lucid_cli PUBLIC
     lucid_parser
     lucid_formatter
     lucid_sema
+    lucid_serialization
 )
 
 target_compile_options(lucid_cli PRIVATE ${LUCID_CXX_WARNINGS})
@@ -279,6 +282,22 @@ target_link_libraries(lucid-check PRIVATE
 target_compile_options(lucid-check PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
     target_compile_options(lucid-check PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
+# ─── Executable: lucid-compile ────────────────────────────────────────────
+
+add_executable(lucid-compile
+    cli/src/cli/CompileMain.cpp
+)
+
+target_link_libraries(lucid-compile PRIVATE
+    lucid_cli
+    lucid_serialization
+)
+
+target_compile_options(lucid-compile PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid-compile PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
 # ─── Executable: lucid-fmt ────────────────────────────────────────────────
