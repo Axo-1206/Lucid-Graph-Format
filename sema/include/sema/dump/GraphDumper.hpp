@@ -16,6 +16,10 @@
 /// The output is deterministic: the same Graph always produces the
 /// same bytes. Fixture tests compare the dumper's output against a
 /// stored file, so determinism is required.
+///
+/// The Graph owns its resource and field names (as std::string), so
+/// the dumper does not depend on the session's StringPool being alive.
+/// A Graph can be dumped after compile() returns.
 
 #pragma once
 

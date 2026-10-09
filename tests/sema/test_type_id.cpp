@@ -41,6 +41,16 @@ TEST_CASE("TypeId handle constructor", "[sema][type-id]")
     CHECK(t.name == "BodyRef");
 }
 
+TEST_CASE("TypeId owns its name", "[sema][type-id]")
+{
+    const TypeId t = [] {
+        const std::string name = "temporary-type";
+        return TypeId::primitive(name);
+    }();
+
+    CHECK(t.name == "temporary-type");
+}
+
 TEST_CASE("TypeId equality compares kind and name", "[sema][type-id]")
 {
     CHECK(TypeId::primitive("float32") == TypeId::primitive("float32"));

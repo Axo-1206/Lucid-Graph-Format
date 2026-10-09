@@ -1,1 +1,1 @@
-{"registryFingerprint":"0","stringPool":{"size":0,"bytes":""},"nodes":[],"resources":[{"index":0,"name":"R","fields":[{"name":"k","type":{"kind":"Enum","name":"Key"},"hasDefault":true,"default":{"kind":"Int32","value":"0"}}]}],"phaseOrder":[],"valueOrder":[]}
+{"registryFingerprint":"525828420695145229","stringPool":{"size":0,"bytes":""},"nodes":[],"resources":[{"index":0,"name":"R","fields":[{"name":"k","type":{"kind":"Enum","name":"Key"},"hasDefault":true,"default":{"kind":"Int32","value":"0"}}]}],"phaseOrder":[],"valueOrder":[]}

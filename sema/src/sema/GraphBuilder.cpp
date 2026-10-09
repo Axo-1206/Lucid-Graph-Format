@@ -82,19 +82,19 @@ namespace lucid::sema
 
         // ─── Per-module context (set at the start of each module's phase) ──
         // These are reset before each phase-B and phase-C iteration.
-        const SymbolTable      *m_symbols     = nullptr;
-        const ResolutionMap    *m_resolutions = nullptr;
-        const ConstantValueMap *m_constants   = nullptr;
-        const TypeMap          *m_types       = nullptr;
+        const SymbolTable *m_symbols = nullptr;
+        const ResolutionMap *m_resolutions = nullptr;
+        const ConstantValueMap *m_constants = nullptr;
+        const TypeMap *m_types = nullptr;
 
         // ─── Shared state ──────────────────────────────────────────────────
-        const Registry   &m_registry;
-        StringPool       &m_pool;
+        const Registry &m_registry;
+        StringPool &m_pool;
         DiagnosticEngine &m_diag;
 
         Graph m_graph;
 
-        std::unordered_map<const NodeDeclAST *, NodeIndex>    m_nodeIndex;
+        std::unordered_map<const NodeDeclAST *, NodeIndex> m_nodeIndex;
         std::unordered_map<const ResourceDeclAST *, uint32_t> m_resourceIndex;
         std::unordered_map<const ResourceFieldAST *, uint32_t> m_fieldIndex;
 
@@ -121,26 +121,32 @@ namespace lucid::sema
         // ─── Phase B: build every module's nodes and resources ─────────────
         for (const ModuleContext &ctx : modules)
         {
-            m_symbols     = ctx.symbols;
+            m_symbols = ctx.symbols;
             m_resolutions = ctx.resolutions;
-            m_constants   = ctx.constants;
-            m_types       = ctx.types;
+            m_constants = ctx.constants;
+            m_types = ctx.types;
             buildDecls(ctx.module);
         }
 
         // ─── Phase C: subscribers ──────────────────────────────────────────
         for (const ModuleContext &ctx : modules)
         {
-            m_symbols     = ctx.symbols;
+            m_symbols = ctx.symbols;
             m_resolutions = ctx.resolutions;
-            m_constants   = ctx.constants;
-            m_types       = ctx.types;
+            m_constants = ctx.constants;
+            m_types = ctx.types;
             buildSubscribers(ctx.module);
         }
 
         // phase_order and value_order are global; no module context needed.
         buildPhaseOrder();
         buildValueOrder();
+
+        // The fingerprint identifies the registry this graph was
+        // compiled against. serialize() writes it into the .lucgraph
+        // header; deserialize() checks it against the loader's
+        // registry and refuses a mismatch.
+        m_graph.registry_fingerprint = computeRegistryFingerprint(m_registry);
 
         return std::make_unique<Graph>(std::move(m_graph));
     }
@@ -287,9 +293,12 @@ namespace lucid::sema
     Resource GraphBuilder::buildResource(const ResourceDeclAST *decl)
     {
         Resource res;
-        res.name = m_diag.stringPool()
-                       ? m_diag.stringPool()->lookupView(decl->name)
-                       : std::string_view{};
+        if (m_diag.stringPool() != nullptr)
+        {
+            const std::string_view view =
+                m_diag.stringPool()->lookupView(decl->name);
+            res.name.assign(view.data(), view.size());
+        }
         res.fields_offset = static_cast<uint32_t>(m_graph.resource_fields.size());
         res.fields_count = static_cast<uint32_t>(decl->fields.size());
         return res;
@@ -298,9 +307,12 @@ namespace lucid::sema
     ResourceField GraphBuilder::buildResourceField(const ResourceFieldAST *field)
     {
         ResourceField rf;
-        rf.name = m_diag.stringPool()
-                      ? m_diag.stringPool()->lookupView(field->name)
-                      : std::string_view{};
+        if (m_diag.stringPool() != nullptr)
+        {
+            const std::string_view view =
+                m_diag.stringPool()->lookupView(field->name);
+            rf.name.assign(view.data(), view.size());
+        }
 
         if (field->type != nullptr)
         {

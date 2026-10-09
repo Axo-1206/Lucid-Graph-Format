@@ -26,6 +26,7 @@
 #include "sema/TypeId.hpp"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -118,9 +119,14 @@ namespace lucid::sema
 
     // ─── Resource ─────────────────────────────────────────────────────────────
 
+    /// @brief One resource in the compiled graph.
+    ///
+    /// `name` is owned. The Graph is a self-contained value: it can
+    /// outlive the Sema session that produced it, and it can be
+    /// serialized without reaching back into a StringPool.
     struct Resource
     {
-        std::string_view name;
+        std::string name;
 
         uint32_t fields_offset = 0;
         uint32_t fields_count = 0;
@@ -139,9 +145,13 @@ namespace lucid::sema
     /// has `hasDefault == false` and is zero-initialized at load time.
     /// A field with an explicit zero (`hp: int = 0`) has
     /// `hasDefault == true` and `defaultValue` holding the zero literal.
+    /// @brief One field of a resource.
+    ///
+    /// Both `name` and `type.name` are owned so graph data remains valid
+    /// after the compilation session ends.
     struct ResourceField
     {
-        std::string_view name;
+        std::string name;
         TypeId type;
         Literal defaultValue;
         bool hasDefault = false;

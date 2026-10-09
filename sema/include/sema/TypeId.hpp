@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 namespace lucid::sema
@@ -41,8 +42,9 @@ namespace lucid::sema
 
         /// The type's canonical name. For primitives, this is the
         /// canonical spelling (`float32`, not `float`). For enums and
-        /// handles, this is the host-declared name.
-        std::string_view name;
+        /// handles, this is the host-declared name. The name is owned so
+        /// TypeIds remain valid after the compilation session ends.
+        std::string name;
 
         // ─── Construction ──────────────────────────────────────────────────
 
