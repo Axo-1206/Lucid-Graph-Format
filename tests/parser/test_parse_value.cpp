@@ -100,6 +100,16 @@ TEST_CASE("parseLiteral parses a hex integer literal", "[parse-value]")
     CHECK(f.pool.lookupView(node->text) == std::string_view{"0xFF"});
 }
 
+TEST_CASE("parseLiteral parses a binary integer literal", "[parse-value]")
+{
+    Fixture f;
+    LiteralValueAST *node = f.runLiteral("0b1010");
+    REQUIRE(node != nullptr);
+    CHECK_FALSE(node->hasSyntaxError);
+    CHECK(node->kind == LiteralKind::Int);
+    CHECK(f.pool.lookupView(node->text) == std::string_view{"0b1010"});
+}
+
 TEST_CASE("parseLiteral parses a negative integer literal", "[parse-value]")
 {
     Fixture f;

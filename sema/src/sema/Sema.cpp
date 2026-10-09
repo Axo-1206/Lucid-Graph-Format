@@ -46,7 +46,8 @@ namespace lucid::sema
 
         // ─── Pass 3: type checking and trigger rules ───────────────────────
         TypeMap types;
-        checkTypes(module, symbols, resolutions, registry, types, diag);
+        ConstantValueMap constants;
+        checkTypes(module, symbols, resolutions, registry, types, constants, diag);
 
         // ─── Stop if any pass reported errors ──────────────────────────────
         if (diag.hasErrors())

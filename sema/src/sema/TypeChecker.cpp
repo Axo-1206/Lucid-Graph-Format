@@ -75,6 +75,60 @@ namespace lucid::sema
             return nullptr;
         }
 
+        // ─── parseIntegerLiteral helper ──────────────────────────────────────────────
+
+        int64_t parseIntegerLiteral(std::string_view text)
+        {
+            // Handle a leading sign.
+            bool negative = false;
+            if (!text.empty() && (text[0] == '+' || text[0] == '-'))
+            {
+                negative = (text[0] == '-');
+                text.remove_prefix(1);
+            }
+
+            int64_t value = 0;
+            int base = 10;
+
+            if (text.size() >= 2 && text[0] == '0')
+            {
+                const char prefix = text[1];
+                if (prefix == 'x' || prefix == 'X')
+                {
+                    base = 16;
+                    text.remove_prefix(2);
+                }
+                else if (prefix == 'b' || prefix == 'B')
+                {
+                    base = 2;
+                    text.remove_prefix(2);
+                }
+                else if (prefix == 'o' || prefix == 'O')
+                {
+                    base = 8;
+                    text.remove_prefix(2);
+                }
+            }
+
+            for (char c : text)
+            {
+                int digit = 0;
+                if (c >= '0' && c <= '9')
+                    digit = c - '0';
+                else if (c >= 'a' && c <= 'f')
+                    digit = 10 + (c - 'a');
+                else if (c >= 'A' && c <= 'F')
+                    digit = 10 + (c - 'A');
+                else
+                    break; // stop at the first non-digit
+                if (digit >= base)
+                    break;
+                value = value * base + digit;
+            }
+
+            return negative ? -value : value;
+        }
+
     } // namespace
 
     // ─── TypeChecker ──────────────────────────────────────────────────────────
@@ -86,8 +140,9 @@ namespace lucid::sema
                     const ResolutionMap &resolutions,
                     const Registry &registry,
                     TypeMap &types,
+                    ConstantValueMap &constants,
                     DiagnosticEngine &diag)
-            : m_symbols(symbols), m_resolutions(resolutions), m_registry(registry), m_types(types), m_diag(diag)
+            : m_symbols(symbols), m_resolutions(resolutions), m_registry(registry), m_types(types), m_constants(constants), m_diag(diag)
         {
         }
 
@@ -161,6 +216,7 @@ namespace lucid::sema
         const ResolutionMap &m_resolutions;
         const Registry &m_registry;
         TypeMap &m_types;
+        ConstantValueMap &m_constants;
         DiagnosticEngine &m_diag;
     };
 
@@ -360,39 +416,71 @@ namespace lucid::sema
         if (value == nullptr)
             return TypeId{};
 
-        // The literal's type is derived from its kind:
-        //   Int     → int32 (default)
-        //   Float   → float32 (default)
-        //   String  → string
-        //   Char    → char
-        //   Bool    → bool
-        //   Nil     → Invalid (special; allowed only for handles)
-        //
-        // The graph stores the literal's exact kind; the type checker
-        // records the "default" type. Actual argument checking matches
-        // the literal's kind against the declared argument type.
+        // The literal's type is derived from its kind. The literal's
+        // *value* is recorded in the constant map at the same time.
         switch (value->kind)
         {
         case LiteralKind::Int:
+        {
             m_types.record(value, TypeId::primitive("int32"));
+            Literal lit;
+            lit.kind = Literal::Kind::Int32;
+            lit.i = parseIntegerLiteral(name(value->text));
+            m_constants.record(value, lit);
             return TypeId::primitive("int32");
+        }
         case LiteralKind::Float:
+        {
             m_types.record(value, TypeId::primitive("float32"));
+
+            Literal lit;
+            lit.kind = Literal::Kind::Float32;
+            const std::string text(name(value->text));
+            lit.f = std::strtod(text.c_str(), nullptr);
+            m_constants.record(value, lit);
+
             return TypeId::primitive("float32");
+        }
         case LiteralKind::String:
+        {
             m_types.record(value, TypeId::primitive("string"));
+            // Strings are not constant-folded here: their bytes live in
+            // the graph's string pool, which is built during graph
+            // construction. The string literal's AST node is read by
+            // graph construction directly.
             return TypeId::primitive("string");
+        }
         case LiteralKind::Char:
+        {
             m_types.record(value, TypeId::primitive("char"));
+
+            Literal lit;
+            lit.kind = Literal::Kind::Char;
+            const std::string_view text = name(value->text);
+            lit.c = text.empty() ? '\0' : text[0];
+            m_constants.record(value, lit);
+
             return TypeId::primitive("char");
+        }
         case LiteralKind::Bool:
+        {
             m_types.record(value, TypeId::primitive("bool"));
+
+            Literal lit;
+            lit.kind = Literal::Kind::Bool;
+            lit.b = (name(value->text) == "true");
+            m_constants.record(value, lit);
+
             return TypeId::primitive("bool");
+        }
         case LiteralKind::Nil:
-            // Nil has no type. Record invalid; the caller checks
-            // contextually.
+        {
             m_types.record(value, TypeId{});
+            Literal lit;
+            lit.kind = Literal::Kind::Nil;
+            m_constants.record(value, lit);
             return TypeId{};
+        }
         }
         return TypeId{};
     }
@@ -481,28 +569,24 @@ namespace lucid::sema
         }
         case ASTKind::EnumDecl:
         {
-            // An enum field access is `Key.W`. Its type is the enum.
             const auto *enumDecl = target->as<EnumDeclAST>();
-            // Verify the member exists. The registry is authoritative;
-            // the script's `enum Key { ... }` may be a subset.
             const auto *enumInfo = lookupEnumType(m_registry,
                                                   name(enumDecl->name));
             if (enumInfo == nullptr)
             {
-                // The registry does not declare this enum. Deferred to
-                // a later pass; for now, accept it and record the enum
-                // type by name.
                 const TypeId enumType =
                     TypeId::enumType(name(enumDecl->name));
                 m_types.record(value, enumType);
                 return enumType;
             }
             bool found = false;
+            int64_t memberValue = 0;
             for (const EnumMemberInfo &member : enumInfo->members)
             {
                 if (member.name == name(value->field))
                 {
                     found = true;
+                    memberValue = member.value;
                     break;
                 }
             }
@@ -512,12 +596,40 @@ namespace lucid::sema
                              "no member '", name(value->field),
                              "' on enum '", name(enumDecl->name), "'");
             }
+            else
+            {
+                // Record the member's integer value.
+                Literal lit;
+                if (memberValue >= INT32_MIN && memberValue <= INT32_MAX)
+                {
+                    lit.kind = Literal::Kind::Int32;
+                    lit.i = memberValue;
+                }
+                else
+                {
+                    lit.kind = Literal::Kind::Int64;
+                    lit.i = memberValue;
+                }
+                m_constants.record(value, lit);
+            }
             const TypeId enumType = TypeId::enumType(name(enumDecl->name));
             m_types.record(value, enumType);
             return enumType;
         }
         default:
-            // The object is not a resource or enum at module scope.
+            // The object is not a resource or enum. Under Option A,
+            // a node has a single output, read by the node's bare
+            // name; a node has no named fields. A field access on a
+            // node is not a valid value.
+            if (target->kind == ASTKind::NodeDecl)
+            {
+                m_diag.error(DiagCode::Type_InvalidFieldAccess, value,
+                             "a node has a single value, read by its bare "
+                             "name; '",
+                             name(value->field),
+                             "' is not a field on node '",
+                             name(value->object), "'");
+            }
             m_types.record(value, TypeId{});
             return TypeId{};
         }
@@ -675,9 +787,10 @@ namespace lucid::sema
                     const ResolutionMap &resolutions,
                     const Registry &registry,
                     TypeMap &types,
-                    DiagnosticEngine &diag)
+                    ConstantValueMap &constants,
+                    lucid::diag::DiagnosticEngine &diag)
     {
-        TypeChecker checker(symbols, resolutions, registry, types, diag);
+        TypeChecker checker(symbols, resolutions, registry, types, constants, diag);
         checker.checkModule(module);
     }
 

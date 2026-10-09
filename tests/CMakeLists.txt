@@ -169,6 +169,7 @@ add_executable(test_sema
     sema/test_primitives.cpp
     sema/test_type_map.cpp
     sema/test_type_checker.cpp
+    sema/test_constant_value_map.cpp
 )
 
 target_link_libraries(test_sema PRIVATE

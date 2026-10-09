@@ -276,7 +276,6 @@ An `IDENTIFIER '.' IDENTIFIER` is a field access. It covers:
 
 - A resource field: `Config.speed`.
 - An enum member: `Key.W`, `Direction.North`.
-- A node output: `player_health.current`.
 
 The parser produces a `FieldAccessValueAST`; Sema resolves the object's kind and reads the appropriate field, member, or output.
 

@@ -332,6 +332,19 @@ TEST_CASE("Lexer: radix literal with no digits is an error",
     REQUIRE(countCode(diag, lucid::diag::DiagCode::Lex_InvalidRadixLiteral) == 3);
 }
 
+TEST_CASE("lexer produces INT_LITERAL for 0b1010 with text '0b1010'",
+          "[lexer]")
+{
+    StringPool pool;
+    lucid::diag::DiagnosticEngine diag(&pool);
+    auto tokens = lucid::lexer::tokenize("0b1010", pool, diag);
+
+    REQUIRE(tokens.size() >= 1);
+    CHECK(tokens[0].type == TokenType::INT_LITERAL);
+    CHECK(pool.lookupView(tokens[0].value) == "0b1010");
+    CHECK_FALSE(diag.hasErrors());
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Float literals
 // ─────────────────────────────────────────────────────────────────────────────
