@@ -118,7 +118,7 @@ namespace lucid::cli::commands
         // sensible name to write.
         if (fromStdin && opts.outputFile.empty())
         {
-            std::cerr << "lucid-compile: -o <path> is required when "
+            std::cerr << "lucid compile: -o <path> is required when "
                          "reading from stdin\n";
             return 2;
         }
@@ -137,7 +137,7 @@ namespace lucid::cli::commands
             std::string err;
             if (!readFile(opts.inputFile, source, err))
             {
-                std::cerr << "lucid-compile: " << err << "\n";
+                std::cerr << "lucid compile: " << err << "\n";
                 return 2;
             }
             fileName = opts.inputFile;
@@ -196,7 +196,7 @@ namespace lucid::cli::commands
 
         if (!result.ok || result.graph == nullptr)
         {
-            std::cerr << "lucid-compile: compilation failed\n";
+            std::cerr << "lucid compile: compilation failed\n";
             return 1;
         }
 
@@ -208,7 +208,7 @@ namespace lucid::cli::commands
         std::string err;
         if (!writeFileBytes(outputPath, bytes, err))
         {
-            std::cerr << "lucid-compile: " << err << "\n";
+            std::cerr << "lucid compile: " << err << "\n";
             return 2;
         }
 

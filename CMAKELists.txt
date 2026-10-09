@@ -268,49 +268,20 @@ if(MSVC)
     target_compile_options(lucid_cli PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
-# ─── Executable: lucid-check ──────────────────────────────────────────────
+# ─── Executable: lucid ────────────────────────────────────────────────────
 
-add_executable(lucid-check
-    cli/src/cli/CheckMain.cpp
+add_executable(lucid
+    cli/src/cli/Main.cpp
 )
 
-target_link_libraries(lucid-check PRIVATE
-    lucid_cli
-    lucid_sema
-)
-
-target_compile_options(lucid-check PRIVATE ${LUCID_CXX_WARNINGS})
-if(MSVC)
-    target_compile_options(lucid-check PRIVATE ${LUCID_MSVC_FLAGS})
-endif()
-
-# ─── Executable: lucid-compile ────────────────────────────────────────────
-
-add_executable(lucid-compile
-    cli/src/cli/CompileMain.cpp
-)
-
-target_link_libraries(lucid-compile PRIVATE
+target_link_libraries(lucid PRIVATE
     lucid_cli
     lucid_serialization
 )
 
-target_compile_options(lucid-compile PRIVATE ${LUCID_CXX_WARNINGS})
+target_compile_options(lucid PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
-    target_compile_options(lucid-compile PRIVATE ${LUCID_MSVC_FLAGS})
-endif()
-
-# ─── Executable: lucid-fmt ────────────────────────────────────────────────
-
-add_executable(lucid-fmt
-    cli/src/cli/Main.cpp
-)
-
-target_link_libraries(lucid-fmt PRIVATE lucid_cli)
-
-target_compile_options(lucid-fmt PRIVATE ${LUCID_CXX_WARNINGS})
-if(MSVC)
-    target_compile_options(lucid-fmt PRIVATE ${LUCID_MSVC_FLAGS})
+    target_compile_options(lucid PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
 # ─── Tests ─────────────────────────────────────────────────────────────────
@@ -331,11 +302,17 @@ message(STATUS "Generator:      ${CMAKE_GENERATOR}")
 message(STATUS "Werror:         ${LUCID_WERROR}")
 message(STATUS "")
 message(STATUS "Libraries:")
-message(STATUS "  lucid_core       (core/)")
-message(STATUS "  lucid_parser     (parser/)")
-message(STATUS "  lucid_formatter  (formatter/)")
-message(STATUS "  lucid_sema       (sema/)")
+message(STATUS "  lucid_core            (core/)")
+message(STATUS "  lucid_parser          (parser/)")
+message(STATUS "  lucid_formatter       (formatter/)")
+message(STATUS "  lucid_serialization   (serialization/)")
+message(STATUS "  lucid_sema            (sema/)")
 message(STATUS "")
 message(STATUS "Executable:")
-message(STATUS "  lucid-fmt        (src/main.cpp)")
+message(STATUS "  lucid            (cli/src/cli/Main.cpp)")
+message(STATUS "")
+message(STATUS "Subcommands:")
+message(STATUS "  lucid format     (cli/src/cli/commands/Format.cpp)")
+message(STATUS "  lucid check      (cli/src/cli/commands/Check.cpp)")
+message(STATUS "  lucid compile    (cli/src/cli/commands/Compile.cpp)")
 message(STATUS "========================================")

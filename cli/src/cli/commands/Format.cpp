@@ -74,7 +74,7 @@ namespace lucid::cli::commands
             std::string err;
             if (!readFile(opts.inputFile, source, err))
             {
-                std::cerr << "lucid-fmt: " << err << "\n";
+                std::cerr << "lucid format: " << err << "\n";
                 return 2;
             }
             fileName = opts.inputFile;
@@ -86,7 +86,7 @@ namespace lucid::cli::commands
 
         if (!result.ok)
         {
-            std::cerr << "lucid-fmt: cannot format " << fileName
+            std::cerr << "lucid format: cannot format " << fileName
                       << ": parse errors\n";
             for (const auto &d : result.diagnostics)
             {
@@ -113,7 +113,7 @@ namespace lucid::cli::commands
         std::string err;
         if (!writeFile(opts.outputFile, result.text, err))
         {
-            std::cerr << "lucid-fmt: " << err << "\n";
+            std::cerr << "lucid format: " << err << "\n";
             return 2;
         }
         return 0;

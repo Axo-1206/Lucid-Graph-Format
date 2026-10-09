@@ -48,11 +48,6 @@ namespace lucid::cli::commands
 
     int runCheck(const CLIOptions &opts)
     {
-        if (!opts.outputFile.empty())
-        {
-            std::cerr << "lucid-check: -o is not supported\n";
-            return 2;
-        }
 
         // ─── Read input ────────────────────────────────────────────────────
         std::string source;
@@ -68,7 +63,7 @@ namespace lucid::cli::commands
             std::string err;
             if (!readFile(opts.inputFile, source, err))
             {
-                std::cerr << "lucid-check: " << err << "\n";
+                std::cerr << "lucid check: " << err << "\n";
                 return 2;
             }
             fileName = opts.inputFile;

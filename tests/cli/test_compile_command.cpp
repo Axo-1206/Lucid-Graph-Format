@@ -37,7 +37,7 @@ namespace
 
 } // namespace
 
-TEST_CASE("lucid-compile: stdin without -o returns 2",
+TEST_CASE("lucid compile: stdin without -o returns 2",
           "[cli][compile]")
 {
     const CLIOptions opts = makeOpts("-");
@@ -47,7 +47,7 @@ TEST_CASE("lucid-compile: stdin without -o returns 2",
     CHECK(rc == 2);
 }
 
-TEST_CASE("lucid-compile: missing input file returns 2",
+TEST_CASE("lucid compile: missing input file returns 2",
           "[cli][compile]")
 {
     const CLIOptions opts =
@@ -56,7 +56,7 @@ TEST_CASE("lucid-compile: missing input file returns 2",
     CHECK(rc == 2);
 }
 
-TEST_CASE("lucid-compile: a .lucid file with a parse error returns 1",
+TEST_CASE("lucid compile: a .lucid file with a parse error returns 1",
           "[cli][compile]")
 {
     // This test depends on a fixture path; the fixtures directory is
@@ -76,7 +76,7 @@ TEST_CASE("lucid-compile: a .lucid file with a parse error returns 1",
     SUCCEED("covered by the pipeline tests");
 }
 
-TEST_CASE("lucid-compile: unknown option is reported by CLIOptions",
+TEST_CASE("lucid compile: unknown option is reported by CLIOptions",
           "[cli][compile]")
 {
     std::vector<std::string> args = {"lucid-compile", "--bogus"};

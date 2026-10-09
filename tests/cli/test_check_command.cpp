@@ -127,16 +127,23 @@ TEST_CASE("runCheck returns 2 for a missing input file", "[check-cmd]")
     CHECK(runCheck(opts) == 2);
 }
 
-TEST_CASE("runCheck rejects -o as unsupported", "[check-cmd]")
+// ─── The `-o` rejection lives in the parser ──────────────────────────────
+//
+// `runCheck` used to reject `-o` at the command level. As of Step 9.1,
+// the rejection is in `CLIOptions::parse`, so the check happens before
+// the command is ever called. A test that constructs a `CLIOptions` by
+// hand and calls `runCheck` cannot exercise this path — the parser is
+// not in the loop. The test below exercises the parser instead.
+
+TEST_CASE("lucid check: -o is rejected by the parser", "[check-cmd]")
 {
-    TempFile file("with-output");
-    file.write("node x = Float32Node(1.5)\n");
+    using lucid::cli::CLIOptions;
 
-    CLIOptions opts;
-    opts.inputFile = file.string();
-    opts.outputFile = "/tmp/out.lucid";
+    std::vector<std::string> args = {
+        "lucid", "check", "-o", "/tmp/out.lucid", "in.lucid"};
+    const CLIOptions opts = CLIOptions::parse(args);
 
-    CHECK(runCheck(opts) == 2);
+    CHECK_FALSE(opts.valid());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
