@@ -143,6 +143,7 @@ add_custom_target(regen-fixtures
 add_executable(test_cli
     cli/test_cli_options.cpp
     cli/test_format_command.cpp
+    cli/test_check_command.cpp
 )
 
 target_link_libraries(test_cli PRIVATE
