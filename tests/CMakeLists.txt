@@ -198,3 +198,18 @@ target_compile_definitions(test_sema PRIVATE
 target_compile_options(test_sema PRIVATE ${LUCID_CXX_WARNINGS})
 
 add_test(NAME sema COMMAND test_sema)
+
+# ─── test_serialization ─────────────────────────────────────────────────────────────
+
+add_executable(test_serialization
+    serialization/test_serializer.cpp
+)
+
+target_link_libraries(test_serialization PRIVATE
+    lucid_serialization
+    Catch2::Catch2WithMain
+)
+
+target_compile_options(test_serialization PRIVATE ${LUCID_CXX_WARNINGS})
+
+add_test(NAME serialization COMMAND test_serialization)

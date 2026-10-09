@@ -217,6 +217,29 @@ if(MSVC)
     target_compile_options(lucid_sema PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
+# ─── Library: lucid_serialization ──────────────────────────────────────────
+
+add_library(lucid_serialization STATIC
+    serialization/src/serialization/Serializer.cpp
+)
+
+target_include_directories(lucid_serialization
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/serialization/include"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/serialization/src"
+)
+
+target_link_libraries(lucid_serialization PUBLIC
+    lucid_core
+    lucid_sema
+)
+
+target_compile_options(lucid_serialization PRIVATE ${LUCID_CXX_WARNINGS})
+if(MSVC)
+    target_compile_options(lucid_serialization PRIVATE ${LUCID_MSVC_FLAGS})
+endif()
+
 # ─── Library: lucid_cli ───────────────────────────────────────────────────
 
 add_library(lucid_cli STATIC
