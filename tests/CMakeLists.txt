@@ -178,6 +178,7 @@ add_executable(test_sema
     sema/test_import_resolver.cpp
     sema/test_multi_module.cpp
     sema/test_sema_fixtures.cpp
+    sema/test_pipeline_smoke.cpp
 )
 
 target_link_libraries(test_sema PRIVATE

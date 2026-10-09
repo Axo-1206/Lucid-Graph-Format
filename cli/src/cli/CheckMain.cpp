@@ -4,6 +4,7 @@
 
 #include "cli/CLIOptions.hpp"
 #include "cli/commands/Check.hpp"
+#include "cli/Version.hpp"
 
 #include <iostream>
 #include <string>
@@ -13,7 +14,6 @@ namespace
 {
 
     constexpr const char *kProgramName = "lucid-check";
-    constexpr const char *kVersion = "0.1.0";
 
     void printHelp()
     {
@@ -32,7 +32,7 @@ namespace
 
     void printVersion()
     {
-        std::cout << kProgramName << ' ' << kVersion << '\n';
+        std::cout << kProgramName << ' ' << lucid::cli::kVersion << '\n';
     }
 
 } // namespace
