@@ -1,6 +1,9 @@
 /// @file cli/src/cli/commands/Check.cpp
 ///
-/// @brief Implementation of the `lucid-check` command.
+/// @brief Implementation of the `lucid check` subcommand.
+///
+/// Invoked as `lucid check [options] [file]`. See `Main.cpp` for the
+/// dispatcher and the top-level help text.
 
 #include "cli/commands/Check.hpp"
 #include "cli/Registry.hpp"

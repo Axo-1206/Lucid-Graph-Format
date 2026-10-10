@@ -1,6 +1,9 @@
 /// @file cli/src/cli/commands/Compile.cpp
 ///
-/// @brief Implementation of the `lucid-compile` command.
+/// @brief Implementation of the `lucid compile` subcommand.
+///
+/// Invoked as `lucid compile [options] [file]`. See `Main.cpp` for
+/// the dispatcher and the top-level help text.
 
 #include "cli/commands/Compile.hpp"
 

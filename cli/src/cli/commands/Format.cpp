@@ -1,6 +1,9 @@
 /// @file cli/src/cli/commands/Format.cpp
 ///
-/// @brief Implementation of the `lucid-fmt` command.
+/// @brief Implementation of the `lucid format` subcommand.
+///
+/// Invoked as `lucid format [options] [file]`. See `Main.cpp` for the
+/// dispatcher and the top-level help text.
 
 #include "cli/commands/Format.hpp"
 
