@@ -1,43 +1,83 @@
 cmake_minimum_required(VERSION 3.15)
 
-# ─── Compiler pin (must come before project()) ─────────────────────────────
+# ─── Options ───────────────────────────────────────────────────────────────
 #
-# On Windows, force MSVC. CMake's default search picks whatever `c++` is
-# first on PATH, which on a plain PowerShell is often a MinGW or Strawberry
-# Perl compiler. That compiler does not ship MSVC's headers, does not honor
-# /FS /MP, and produces a compile_commands.json that clangd cannot resolve
-# against the MSVC system headers.
+# These control whether the library is built as a standalone project or as
+# a subproject of a parent build.
 #
-# This block runs before `project()`, which is where CMake finalizes the
-# compiler. Setting CMAKE_CXX_COMPILER here (as a CACHE variable) pins it
-# for every configure, regardless of the calling shell.
+option(LUCID_FORMAT_IS_SUBPROJECT
+    "Build as a subproject of a parent CMake project" OFF)
+option(LUCID_FORMAT_BUILD_CLI
+    "Build the lucid CLI executable" ON)
+option(LUCID_FORMAT_BUILD_TESTS
+    "Build the test suite" ON)
 
-if(WIN32 AND NOT DEFINED CMAKE_CXX_COMPILER)
-    file(GLOB MSVC_CL_PATHS
-        "C:/Program Files/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe"
-        "C:/Program Files (x86)/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe"
-    )
-    if(MSVC_CL_PATHS)
-        list(GET MSVC_CL_PATHS 0 MSVC_CL_PATH)
-        set(CMAKE_CXX_COMPILER "${MSVC_CL_PATH}" CACHE STRING "C++ compiler" FORCE)
-        set(CMAKE_C_COMPILER   "${MSVC_CL_PATH}" CACHE STRING "C compiler"   FORCE)
-        message(STATUS "Pinned compiler: ${MSVC_CL_PATH}")
-    else()
-        message(FATAL_ERROR
-            "MSVC not found under C:/Program Files[/ (x86)]/Microsoft Visual "
-            "Studio/2022/*.\n"
-            "Install Visual Studio 2022 (or Build Tools) with the 'Desktop "
-            "development with C++' workload, then reconfigure.")
+# ─── Top-level-only setup ──────────────────────────────────────────────────
+#
+# The compiler pin, environment checks, and global settings are only
+# appropriate when the library is the root project. As a subproject,
+# the parent owns the compiler and the build settings.
+
+if(NOT LUCID_FORMAT_IS_SUBPROJECT)
+
+    # Compiler pin (Windows: force MSVC).
+    if(WIN32 AND NOT DEFINED CMAKE_CXX_COMPILER)
+        file(GLOB MSVC_CL_PATHS
+            "C:/Program Files/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe"
+            "C:/Program Files (x86)/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe"
+        )
+        if(MSVC_CL_PATHS)
+            list(GET MSVC_CL_PATHS 0 MSVC_CL_PATH)
+            set(CMAKE_CXX_COMPILER "${MSVC_CL_PATH}" CACHE STRING "C++ compiler" FORCE)
+            set(CMAKE_C_COMPILER   "${MSVC_CL_PATH}" CACHE STRING "C compiler"   FORCE)
+            message(STATUS "Pinned compiler: ${MSVC_CL_PATH}")
+        else()
+            message(FATAL_ERROR
+                "MSVC not found under C:/Program Files[/ (x86)]/Microsoft Visual "
+                "Studio/2022/*.\n"
+                "Install Visual Studio 2022 (or Build Tools) with the 'Desktop "
+                "development with C++' workload, then reconfigure.")
+        endif()
     endif()
+
+    # Environment check.
+    if(WIN32 AND MSVC AND CMAKE_GENERATOR STREQUAL "Ninja" AND NOT DEFINED ENV{INCLUDE})
+        message(FATAL_ERROR "...")
+    endif()
+
+    # Global settings.
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+    if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+        set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+    endif()
+
+    # Warning options and shared flags.
+    option(LUCID_WERROR "Treat warnings as errors" OFF)
+    set(LUCID_CXX_WARNINGS
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
+    )
+    if(LUCID_WERROR)
+        list(APPEND LUCID_CXX_WARNINGS
+            $<$<CXX_COMPILER_ID:MSVC>:/WX>
+            $<$<CXX_COMPILER_ID:GNU,Clang>:-Werror>
+        )
+    endif()
+    set(LUCID_MSVC_FLAGS /FS /MP)
+
 endif()
+
+# ─── Project declaration ───────────────────────────────────────────────────
 
 project(LucidFormat LANGUAGES CXX)
 
-# ─── Compiler enforcement (safety net) ─────────────────────────────────────
-#
-# On Windows, require MSVC. See the comment above for why.
+# ─── Compiler enforcement (safety net) ────────────────────────────────────
 
-if(WIN32 AND NOT MSVC)
+if(NOT LUCID_FORMAT_IS_SUBPROJECT AND WIN32 AND NOT MSVC)
     message(FATAL_ERROR
         "This project targets MSVC on Windows.\n"
         "  Detected compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\n"
@@ -49,65 +89,18 @@ if(WIN32 AND NOT MSVC)
         "reconfigure, or pass -DCMAKE_CXX_COMPILER=<path to cl.exe>.")
 endif()
 
-# ─── Environment check ─────────────────────────────────────────────────────
+# ─── Warning options (available in both modes) ─────────────────────────────
 
-# Only require the developer environment when using Ninja. The Visual
-# Studio generator resolves the toolchain through the registry and does
-# not need INCLUDE set in the shell.
-if(WIN32 AND MSVC AND CMAKE_GENERATOR STREQUAL "Ninja"
-        AND NOT DEFINED ENV{INCLUDE})
-    message(FATAL_ERROR "...")
-endif()
-
-# ─── Standard & compiler identity ──────────────────────────────────────────
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# ─── MSVC runtime consistency ──────────────────────────────────────────────
-
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
-
-# ─── Default build type for single-config generators ───────────────────────
-
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
-endif()
-
-# ─── Single-config convenience for the Visual Studio generator ─────────────
-#
-# The VS generator is multi-config; without this, every `cmake --build` and
-# `ctest` needs `--config Release`. Restricting the configuration types to
-# Release lets the build and test commands omit the flag. If you later want
-# to build Debug, remove this block or add "Debug" to the list.
-
-# if(CMAKE_CONFIGURATION_TYPES)
-#     set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
-# endif()
-
-# ─── Warning options ───────────────────────────────────────────────────────
-
-option(LUCID_WERROR "Treat warnings as errors" OFF)
-
-set(LUCID_CXX_WARNINGS
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
-)
-
-if(LUCID_WERROR)
-    list(APPEND LUCID_CXX_WARNINGS
-        $<$<CXX_COMPILER_ID:MSVC>:/WX>
-        $<$<CXX_COMPILER_ID:GNU,Clang>:-Werror>
+if(NOT DEFINED LUCID_CXX_WARNINGS)
+    set(LUCID_CXX_WARNINGS
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
     )
 endif()
 
-set(LUCID_MSVC_FLAGS
-    /FS        # force sequential PDB writes
-    /MP        # multi-processor compilation
-)
+if(NOT DEFINED LUCID_MSVC_FLAGS)
+    set(LUCID_MSVC_FLAGS /FS /MP)
+endif()
 
 # ─── Library: lucid_core ───────────────────────────────────────────────────
 
@@ -124,6 +117,7 @@ target_include_directories(lucid_core
         "${CMAKE_CURRENT_SOURCE_DIR}/core/src"
 )
 
+target_compile_features(lucid_core PUBLIC cxx_std_17)
 target_compile_options(lucid_core PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
     target_compile_options(lucid_core PRIVATE ${LUCID_MSVC_FLAGS})
@@ -151,6 +145,7 @@ target_include_directories(lucid_parser
 
 target_link_libraries(lucid_parser PUBLIC lucid_core)
 
+target_compile_features(lucid_parser PUBLIC cxx_std_17)
 target_compile_options(lucid_parser PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
     target_compile_options(lucid_parser PRIVATE ${LUCID_MSVC_FLAGS})
@@ -175,6 +170,7 @@ target_link_libraries(lucid_formatter PUBLIC
     lucid_parser
 )
 
+target_compile_features(lucid_formatter PUBLIC cxx_std_17)
 target_compile_options(lucid_formatter PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
     target_compile_options(lucid_formatter PRIVATE ${LUCID_MSVC_FLAGS})
@@ -212,6 +208,7 @@ target_link_libraries(lucid_sema PUBLIC
     lucid_parser
 )
 
+target_compile_features(lucid_sema PUBLIC cxx_std_17)
 target_compile_options(lucid_sema PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
     target_compile_options(lucid_sema PRIVATE ${LUCID_MSVC_FLAGS})
@@ -236,83 +233,92 @@ target_link_libraries(lucid_serialization PUBLIC
     lucid_sema
 )
 
+target_compile_features(lucid_serialization PUBLIC cxx_std_17)
 target_compile_options(lucid_serialization PRIVATE ${LUCID_CXX_WARNINGS})
 if(MSVC)
     target_compile_options(lucid_serialization PRIVATE ${LUCID_MSVC_FLAGS})
 endif()
 
-# ─── Library: lucid_cli ───────────────────────────────────────────────────
+# ─── CLI (conditional) ─────────────────────────────────────────────────────
 
-add_library(lucid_cli STATIC
-    cli/src/cli/CLIOptions.cpp
-    cli/src/cli/Registry.cpp
-    cli/src/cli/commands/Format.cpp
-    cli/src/cli/commands/Check.cpp
-    cli/src/cli/commands/Compile.cpp
-)
+if(LUCID_FORMAT_BUILD_CLI)
+    add_library(lucid_cli STATIC
+        cli/src/cli/CLIOptions.cpp
+        cli/src/cli/Registry.cpp
+        cli/src/cli/commands/Format.cpp
+        cli/src/cli/commands/Check.cpp
+        cli/src/cli/commands/Compile.cpp
+    )
 
-target_include_directories(lucid_cli PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/cli/include"
-)
+    target_include_directories(lucid_cli PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/cli/include"
+    )
 
-target_link_libraries(lucid_cli PUBLIC
-    lucid_core
-    lucid_parser
-    lucid_formatter
-    lucid_sema
-    lucid_serialization
-)
+    target_link_libraries(lucid_cli PUBLIC
+        lucid_core
+        lucid_parser
+        lucid_formatter
+        lucid_sema
+        lucid_serialization
+    )
 
-target_compile_options(lucid_cli PRIVATE ${LUCID_CXX_WARNINGS})
-if(MSVC)
-    target_compile_options(lucid_cli PRIVATE ${LUCID_MSVC_FLAGS})
+    target_compile_features(lucid_cli PUBLIC cxx_std_17)
+    target_compile_options(lucid_cli PRIVATE ${LUCID_CXX_WARNINGS})
+    if(MSVC)
+        target_compile_options(lucid_cli PRIVATE ${LUCID_MSVC_FLAGS})
+    endif()
+
+    add_executable(lucid
+        cli/src/cli/Main.cpp
+    )
+
+    target_link_libraries(lucid PRIVATE
+        lucid_cli
+        lucid_serialization
+    )
+
+    target_compile_features(lucid PRIVATE cxx_std_17)
+    target_compile_options(lucid PRIVATE ${LUCID_CXX_WARNINGS})
+    if(MSVC)
+        target_compile_options(lucid PRIVATE ${LUCID_MSVC_FLAGS})
+    endif()
 endif()
 
-# ─── Executable: lucid ────────────────────────────────────────────────────
+# ─── Tests (conditional) ───────────────────────────────────────────────────
 
-add_executable(lucid
-    cli/src/cli/Main.cpp
-)
-
-target_link_libraries(lucid PRIVATE
-    lucid_cli
-    lucid_serialization
-)
-
-target_compile_options(lucid PRIVATE ${LUCID_CXX_WARNINGS})
-if(MSVC)
-    target_compile_options(lucid PRIVATE ${LUCID_MSVC_FLAGS})
+if(LUCID_FORMAT_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
-# ─── Tests ─────────────────────────────────────────────────────────────────
+# ─── Summary (standalone only) ─────────────────────────────────────────────
 
-enable_testing()
-add_subdirectory(tests)
-
-# ─── Summary ───────────────────────────────────────────────────────────────
-
-message(STATUS "")
-message(STATUS "========================================")
-message(STATUS "Lucid Format — build configuration")
-message(STATUS "========================================")
-message(STATUS "Project:        ${PROJECT_NAME}")
-message(STATUS "C++ standard:   ${CMAKE_CXX_STANDARD}")
-message(STATUS "Build type:     ${CMAKE_BUILD_TYPE}")
-message(STATUS "Generator:      ${CMAKE_GENERATOR}")
-message(STATUS "Werror:         ${LUCID_WERROR}")
-message(STATUS "")
-message(STATUS "Libraries:")
-message(STATUS "  lucid_core            (core/)")
-message(STATUS "  lucid_parser          (parser/)")
-message(STATUS "  lucid_formatter       (formatter/)")
-message(STATUS "  lucid_serialization   (serialization/)")
-message(STATUS "  lucid_sema            (sema/)")
-message(STATUS "")
-message(STATUS "Executable:")
-message(STATUS "  lucid            (cli/src/cli/Main.cpp)")
-message(STATUS "")
-message(STATUS "Subcommands:")
-message(STATUS "  lucid format     (cli/src/cli/commands/Format.cpp)")
-message(STATUS "  lucid check      (cli/src/cli/commands/Check.cpp)")
-message(STATUS "  lucid compile    (cli/src/cli/commands/Compile.cpp)")
-message(STATUS "========================================")
+if(NOT LUCID_FORMAT_IS_SUBPROJECT)
+    message(STATUS "")
+    message(STATUS "========================================")
+    message(STATUS "Lucid Format — build configuration")
+    message(STATUS "========================================")
+    message(STATUS "Project:        ${PROJECT_NAME}")
+    message(STATUS "C++ standard:   ${CMAKE_CXX_STANDARD}")
+    message(STATUS "Build type:     ${CMAKE_BUILD_TYPE}")
+    message(STATUS "Generator:      ${CMAKE_GENERATOR}")
+    message(STATUS "Werror:         ${LUCID_WERROR}")
+    message(STATUS "")
+    message(STATUS "Libraries:")
+    message(STATUS "  lucid_core            (core/)")
+    message(STATUS "  lucid_parser          (parser/)")
+    message(STATUS "  lucid_formatter       (formatter/)")
+    message(STATUS "  lucid_serialization   (serialization/)")
+    message(STATUS "  lucid_sema            (sema/)")
+    if(LUCID_FORMAT_BUILD_CLI)
+        message(STATUS "")
+        message(STATUS "Executable:")
+        message(STATUS "  lucid            (cli/src/cli/Main.cpp)")
+        message(STATUS "")
+        message(STATUS "Subcommands:")
+        message(STATUS "  lucid format     (cli/src/cli/commands/Format.cpp)")
+        message(STATUS "  lucid check      (cli/src/cli/commands/Check.cpp)")
+        message(STATUS "  lucid compile    (cli/src/cli/commands/Compile.cpp)")
+    endif()
+    message(STATUS "========================================")
+endif()
