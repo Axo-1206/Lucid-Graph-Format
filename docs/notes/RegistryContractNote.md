@@ -855,6 +855,41 @@ both, at the same index, and the fingerprint changes. Nothing else
 about the format library changes; the library does not know the
 node's name, its behavior, or its category, and does not need to.
 
+#### 14.5.1 Gating triggers
+
+The dispatch above runs actions. It does not describe how triggers
+fire, because triggers do not "run" — they fire, and the engine's
+scheduler decides when.
+
+The scheduler needs one additional piece of engine-side metadata:
+for each node type, whether it is a *source trigger* (the engine
+fires it directly) or a *gating trigger* (it fires only when a
+parent fires and a condition holds). The library's `Registry`
+does not carry this distinction, because the library does not give
+`on` a meaning. The engine does.
+
+```cpp
+enum class TriggerMode : uint8_t
+{
+    NotATrigger,   // Value or Action; fires nothing
+    Source,        // fires because the engine says so
+    Gating,        // fires when a parent fires and
+                   // the condition holds
+};
+```
+
+`subscribers` is the graph edge list: a node's subscribers are the
+nodes that depend on it. The engine's scheduler consults the
+trigger mode for each node type and applies the condition test for
+`Gating` triggers before dispatching their subscribers. The library
+stores the graph shape; the engine stores the behavior.
+
+This split is deliberate. A trigger's flow-control meaning is not a
+property of the grammar, and not a property of the format library.
+It is a property of the engine's runtime model. The registry only
+names the node type and its kind. The scheduler decides how that
+kind participates in the event graph.
+
 ### 14.6 What the engine team must remember
 
 Five rules that follow from the split:

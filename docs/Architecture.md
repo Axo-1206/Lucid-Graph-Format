@@ -404,6 +404,87 @@ construction, and stored in the `Graph`. It identifies the
 registry the graph was compiled against. The serialization layer
 writes it into the file; the deserializer checks it.
 
+### 6.4 Trigger gating
+
+The language's grammar allows an `on` clause on any node
+declaration. Sema enforces two rules about it:
+
+- An Action node must have at least one `on` clause.
+- Every `on` target must be a Trigger node.
+
+Sema does **not** constrain a Trigger's `on` clause. A Trigger with
+an `on` clause is a well-formed node. Sema records the subscription
+in the graph's `subscribers` vector. The meaning of the
+subscription — what it means for a Trigger to "subscribe" to
+another Trigger — is the **engine's** concern.
+
+This is a deliberate design choice. The library stores the
+connections between nodes; the engine gives those connections
+semantics. A library that tried to encode "gating" as a formal
+concept would need to know about conditions, evaluation order, and
+control flow. That knowledge is engine-specific. The library
+carries the shape of the graph; the engine runs it.
+
+**The pattern in practice.** A control-flow construct in the
+language is written as a Trigger with an `on` clause and an
+argument that acts as its condition:
+
+```
+node every_frame  = EveryFrameNode()                          -- source
+node grounded     = LessThanNode(player_y, 1.0)               -- value
+node if_grounded  = IfNode(grounded) on every_frame           -- gating
+node jump         = JumpNode(player) on if_grounded           -- action
+```
+
+Read as a sentence: "every frame, if the player is grounded,
+jump." The engine's scheduler fires `every_frame` each tick. When
+`every_frame` fires, `if_grounded` attempts to fire; it succeeds
+only if its condition argument (`grounded`) is true. When
+`if_grounded` fires, `jump` runs.
+
+**Where the semantics live.** The engine maintains a parallel
+metadata table keyed on `NodeId` (the same index the library's
+`Registry` uses). This table flags each trigger type as a *source*
+trigger (the engine fires it directly) or a *gating* trigger (it
+fires when a parent fires and its condition holds). The library's
+`Registry` does not carry this flag; the engine's does. See
+[`notes/RegistryContractNote.md`](notes/RegistryContractNote.md)
+§14.5 for the dispatch table.
+
+**Why not in the library.** Putting the semantics in the library
+would tie it to one engine's control-flow model. A game engine
+might want `IfNode` to short-circuit its subscribers; a tool
+engine might want to evaluate all subscribers and discard the
+results; a test engine might want a different evaluation order.
+The library provides one shape; the engine provides the meaning.
+This is the same split as the rest of the registry boundary: shape
+in the library, content in the engine.
+
+> [!NOTE] 
+> **Subscription cycles.** Two gating triggers may subscribe to each
+other:
+
+```
+node a = IfNode(c1) on b
+node b = IfNode(c2) on a
+```
+
+The library accepts this. Sema does not check for cycles in the
+subscription graph; it only checks that an `on` target resolves to
+a Trigger. Whether a subscription cycle is meaningful is the
+engine's concern.
+
+The engine handles a cycle by marking each node it has already
+fired this tick. When the propagation reaches a node that is
+already marked, it stops. The result is deterministic: each node
+fires at most once per tick, regardless of how many paths lead to
+it.
+
+Note the contrast with **value-node cycles**, which the library
+*does* reject (`Type_Cycle`). A value cycle has no evaluation
+order; a subscription cycle has a well-defined order under the
+fired-this-tick rule.
+
 ---
 
 ## 7. Layer 5 — `serialization`

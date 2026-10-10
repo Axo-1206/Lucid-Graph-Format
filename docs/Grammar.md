@@ -272,6 +272,31 @@ import engine.physics
 node h = physics::Body(player)
 ```
 
+**The `on` clause on any node kind.** The grammar places the
+optional `on` clause on `node_decl`, not on a specific node kind.
+Syntactically, any node declaration may have an `on` clause:
+
+```
+node source       = EveryFrameNode()                   -- a trigger, no `on`
+node gated        = IfNode(condition) on source        -- a trigger, with `on`
+node effect       = ApplyGravityNode(player) on gated  -- an action, with `on`
+```
+
+Whether a given `on` clause is meaningful is a **semantic**
+question, not a syntactic one. Sema enforces two rules:
+
+- An **Action** node must have at least one `on` clause.
+- Every `on` target must resolve to a **Trigger** node.
+
+Sema does **not** forbid a Trigger from having an `on` clause. A
+Trigger with an `on` clause is a **gating trigger**: it fires only
+when the target it subscribes to fires, subject to whatever gating
+semantics the engine attaches to it. The library stores the
+subscription; the engine gives it meaning.
+
+See the "Trigger gating" note in [`Architecture.md`](Architecture.md)
+§6.4 for the design.
+
 ### 2.7 Values
 
 ```
