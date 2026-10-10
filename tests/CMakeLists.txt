@@ -216,3 +216,38 @@ target_link_libraries(test_serialization PRIVATE
 target_compile_options(test_serialization PRIVATE ${LUCID_CXX_WARNINGS})
 
 add_test(NAME serialization COMMAND test_serialization)
+
+# ─── lucid-integration ────────────────────────────────────────────────────
+#
+# Shell-level integration tests for the `lucid` binary. Runs a Python
+# script that invokes the built binary, checks exit codes, and reads
+# the files it writes.
+#
+# The `lucid` target is a dependency, so CMake builds it before
+# running the test.
+
+find_package(Python3 COMPONENTS Interpreter QUIET)
+
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME lucid-integration
+        COMMAND ${Python3_EXECUTABLE}
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/run_lucid_tests.py"
+                "$<TARGET_FILE:lucid>"
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/fixtures"
+    )
+
+    set_tests_properties(lucid-integration PROPERTIES
+        # The test's working directory. Not strictly required, but
+        # keeps any accidental file writes out of the build tree.
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        # Windows: the test needs the MSVC runtime DLLs on PATH. The
+        # build's Debug directory has them; adding it to PATH lets the
+        # binary find them. On Linux, this is a no-op.
+        ENVIRONMENT "PATH=$<TARGET_FILE_DIR:lucid>;$ENV{PATH}"
+    )
+else()
+    message(STATUS
+        "Python3 not found; `lucid-integration` test is disabled. "
+        "Install Python 3 and reconfigure to enable it.")
+endif()

@@ -1,0 +1,3 @@
+-- This file has a syntax error: `node` with no name.
+
+node = Float32Node(1.5)

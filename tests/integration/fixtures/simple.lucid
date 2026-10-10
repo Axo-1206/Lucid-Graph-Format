@@ -1,0 +1,6 @@
+-- A minimal valid module for integration tests.
+-- One value node, one trigger node, one action node.
+
+node speed = Float32Node(2.5)
+node every_frame = EveryFrame()
+node printer = PrintNode(speed) on every_frame
