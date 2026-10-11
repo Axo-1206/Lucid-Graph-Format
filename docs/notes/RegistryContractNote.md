@@ -892,7 +892,7 @@ kind participates in the event graph.
 
 ### 14.6 What the engine team must remember
 
-Five rules that follow from the split:
+Six rules that follow from the split:
 
 1. **Keep the arrays alive.** The `Registry` holds spans into
    `static const` arrays. If any of them lives on the stack or is
@@ -928,3 +928,10 @@ Five rules that follow from the split:
    changes automatically because it hashes that content. Editing
    the version byte is for the format library team when the
    hashing algorithm itself changes.
+
+6. **Give every enum a zero member.** A resource field written
+   without a value takes the type's zero. For an enum, the zero is
+   the member whose integer value is `0`. A registry that declares
+   an enum with no zero member is a malformed registry: Sema reports
+   `Registry_EnumWithoutZero` and the compile fails. Declare every
+   enum with at least one member whose value is `0`.

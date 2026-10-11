@@ -404,6 +404,17 @@ construction, and stored in the `Graph`. It identifies the
 registry the graph was compiled against. The serialization layer
 writes it into the file; the deserializer checks it.
 
+**Resources are compile-time constants.** A resource declared in
+`.lucid` source becomes a set of fields in the `Graph`, each with a
+resolved `Literal` value. A field written with an explicit value has
+that value; a field written without one has the type's zero,
+resolved by `zeroLiteralOf`. After compilation there is no
+`hasDefault` flag and no unresolved case — every resource field has
+a value, and the runtime reads it directly. This is what makes
+resources immutable: the graph stores values, not "defaults that
+might be overridden." An engine that needs mutable runtime state
+keeps it outside the graph.
+
 ### 6.4 Trigger gating
 
 The language's grammar allows an `on` clause on any node
@@ -672,7 +683,22 @@ struct Arg
         } resource_ref;
     };
 };
+
+struct ResourceField
+{
+    std::string name;   // owned
+    TypeId      type;   // owned name; see "TypeId" below
+    Literal     value;  // the field's value; always resolved
+};
 ```
+
+A `ResourceField` always has a value. A field written with
+`= value` in source has that value; a field written without one has
+the type's zero. The compiler resolves both cases before the graph
+is built. There is no "unresolved" resource field and no
+`hasDefault` flag — the source syntax has an optional value, but
+the compiled graph has only values. The string pool still holds a
+field's string values alongside the graph's string literals.
 
 The `Graph` is what the engine walks. It has no parser types, no
 AST, no strings other than literals and resource names. It is a

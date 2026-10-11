@@ -130,6 +130,10 @@ Key properties:
 - **Registry-driven.** Every type and every node type comes from
   the engine's registry. The format library has no built-in
   vocabulary beyond the primitive types.
+- **Resources are compile-time constants.** A `resource` declares
+  values that are resolved at compile time and never change at
+  runtime. A field written without `= value` takes the type's
+  zero. Runtime state is not a resource's concern.
 
 The complete grammar is in [`docs/Grammar.md`](docs/Grammar.md).
 
@@ -212,6 +216,11 @@ only knows the shapes the registry declares.
 The registry's **shape** is defined by the format library:
 `NodeTypeInfo`, `EnumTypeInfo`, `HandleTypeInfo`, `PhaseInfo`, and
 the `NodeKind` enum all live in `sema/include/sema/`.
+
+Every enum the registry declares must have a member whose integer
+value is `0`. A resource field written without a value takes the
+type's zero, and for an enum, that zero is the member with value
+`0`. Sema reports a registry error if an enum has no such member.
 
 The registry's **content** is the engine's. The engine lists its
 nodes, their arguments, their kinds, and their phases. The format

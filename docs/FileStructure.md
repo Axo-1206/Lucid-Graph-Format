@@ -125,6 +125,7 @@ Lucid-Graph-Format/
 │       ├── SymbolTable.cpp            ← implementation of SymbolTable
 │       ├── TypeChecker.hpp            ← Pass 3: assign types, check consistency, enforce rules
 │       ├── TypeChecker.cpp            ← implementation of Pass 3: type checking and trigger rules
+│       ├── TypeId.cpp                 ← implementation of zeroLiteralOf
 │       └── dump/
 │           └── GraphDumper.cpp        ← implementation of the Graph JSON dumper
 │
