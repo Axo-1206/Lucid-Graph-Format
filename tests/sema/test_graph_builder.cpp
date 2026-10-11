@@ -166,8 +166,7 @@ TEST_CASE("buildGraph on a resource-only module",
     auto fields = graph->fieldsOf(graph->resources[0]);
     REQUIRE(fields.size() == 2);
     CHECK(fields[0].name == "x");
-    CHECK(fields[0].hasDefault);
-    CHECK(fields[0].defaultValue.kind == Literal::Kind::Float32);
+    CHECK(fields[0].value.kind == Literal::Kind::Float32);
     CHECK(fields[1].name == "y");
 }
 
@@ -307,11 +306,10 @@ TEST_CASE("buildGraph interns a string resource field default",
     auto fields = graph->fieldsOf(graph->resources[0]);
     REQUIRE(fields.size() == 1);
     CHECK(fields[0].name == "s");
-    CHECK(fields[0].hasDefault);
-    CHECK(fields[0].defaultValue.kind == Literal::Kind::String);
+    CHECK(fields[0].value.kind == Literal::Kind::String);
 
     // The string's bytes are in the pool.
-    const auto &lit = fields[0].defaultValue;
+    const auto &lit = fields[0].value;
     REQUIRE(lit.string.offset + lit.string.length <= graph->string_pool.size());
     const std::string_view s(graph->string_pool.data() + lit.string.offset,
                              lit.string.length);
@@ -332,8 +330,8 @@ TEST_CASE("buildGraph interns multiple string defaults into the pool",
     auto fields = graph->fieldsOf(graph->resources[0]);
     REQUIRE(fields.size() == 2);
 
-    const auto &a = fields[0].defaultValue;
-    const auto &b = fields[1].defaultValue;
+    const auto &a = fields[0].value;
+    const auto &b = fields[1].value;
     CHECK(a.kind == Literal::Kind::String);
     CHECK(b.kind == Literal::Kind::String);
 

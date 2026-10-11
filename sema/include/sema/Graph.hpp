@@ -134,27 +134,28 @@ namespace lucid::sema
 
     /// @brief One field of a resource.
     ///
-    /// `defaultValue` is a Literal, not a general Arg. A field's default
-    /// must be a compile-time constant: a literal, an enum member
-    /// (resolved to an integer), or a node expression that Sema
-    /// constant-folds to a literal. A default that cannot be reduced to
-    /// a literal is a Sema error (`Type_InvalidDefault`).
+    /// `value` is the field's value. Resources are compile-time
+    /// constants: a resource is declared in `.lucid` source, its fields
+    /// are resolved at compile time, and nothing mutates a resource at
+    /// runtime.
     ///
-    /// `hasDefault` distinguishes "no default written" from "a default
-    /// written as the field type's zero value." A field with no default
-    /// has `hasDefault == false` and is zero-initialized at load time.
-    /// A field with an explicit zero (`hp: int = 0`) has
-    /// `hasDefault == true` and `defaultValue` holding the zero literal.
-    /// @brief One field of a resource.
+    /// Every field has a value. A field written with `= value` gets the
+    /// written value; a field written without a default gets the type's
+    /// zero, resolved by `zeroLiteralOf`. The two cases are
+    /// indistinguishable after compilation, which is why there is no
+    /// `hasDefault` flag: the source syntax has a default, but the
+    /// compiled graph has only values.
     ///
-    /// Both `name` and `type.name` are owned so graph data remains valid
-    /// after the compilation session ends.
+    /// `value` is a `Literal`, not a general `Arg`. A field's value must
+    /// be a compile-time constant: a literal, an enum member (resolved
+    /// to an integer), or a node expression that Sema constant-folds to
+    /// a literal. A value that cannot be reduced to a literal is a Sema
+    /// error (`Type_InvalidDefault`).
     struct ResourceField
     {
         std::string name;
         TypeId type;
-        Literal defaultValue;
-        bool hasDefault = false;
+        Literal value;
     };
 
     // ─── Graph ────────────────────────────────────────────────────────────────

@@ -131,10 +131,14 @@ namespace lucid::serialization::format
     /// Resource: name_offset, name_length, fields_offset, fields_count.
     inline constexpr size_t kResourceRecordSize = 16;
 
-    /// ResourceField's fixed prefix (before an optional default):
+    /// ResourceField's fixed prefix:
     /// name_offset, name_length, type_kind, type_name_offset,
-    /// type_name_length, has_default.
-    inline constexpr size_t kResourceFieldFixedPrefix = 18;
+    /// type_name_length.
+    ///
+    /// The `has_default` byte is gone. Every resource field now carries
+    /// a resolved `value`, so there is no "does this field have a
+    /// value?" question to record.
+    inline constexpr size_t kResourceFieldFixedPrefix = 17;
 
     /// A NodeRef arg: 1 byte kind + 4 bytes index.
     inline constexpr size_t kNodeRefArgSize = 5;

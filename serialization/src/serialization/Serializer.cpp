@@ -333,11 +333,8 @@ namespace lucid::serialization
                 w.u8(static_cast<uint8_t>(typeKindOf(f.type.kind)));
                 w.u32(type.offset);
                 w.u32(type.length);
-                w.u8(f.hasDefault ? 1 : 0);
-                if (f.hasDefault)
-                {
-                    writeLiteralPayload(w, f.defaultValue);
-                }
+                // The field's value is always present.
+                writeLiteralPayload(w, f.value);
             }
         }
 

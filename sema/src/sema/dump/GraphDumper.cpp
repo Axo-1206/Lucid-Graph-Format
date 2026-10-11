@@ -148,12 +148,8 @@ namespace lucid::sema::dump
             w.kv("name", f.name);
             w.key("type");
             writeTypeId(w, f.type);
-            w.kv("hasDefault", f.hasDefault);
-            if (f.hasDefault)
-            {
-                w.key("default");
-                writeLiteral(w, f.defaultValue);
-            }
+            w.key("value");
+            writeLiteral(w, f.value);
             w.endObject();
         }
 

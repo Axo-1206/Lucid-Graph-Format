@@ -19,12 +19,15 @@
 
 #pragma once
 
+#include "sema/Literal.hpp"
+
 #include <cstdint>
 #include <string>
 #include <string_view>
 
 namespace lucid::sema
 {
+    struct Registry; // fwd decl for zeroLiteralOf
 
     /// @brief A tagged reference to a type.
     struct TypeId
@@ -115,5 +118,41 @@ namespace lucid::sema
         }
         return "Unknown";
     }
+
+    // ─── zeroLiteralOf ────────────────────────────────────────────────────────
+    //
+    // The zero value of a type, as a Literal. Used to resolve a resource
+    // field whose source did not write `= value`. Every resource field has
+    // a value in the compiled graph; this function supplies the value for
+    // the fields where the source omitted it.
+    //
+    // ─── Definition of "zero" ─────────────────────────────────────────────
+    //   bool      → false
+    //   char      → '\0'
+    //   string    → empty string (offset 0, length 0)
+    //   intN      → 0
+    //   uintN     → 0
+    //   floatN    → 0.0
+    //   enum      → the member whose integer value is 0
+    //   handle    → nil
+    //   Invalid   → nil
+    //
+    // For an enum, the zero is the member whose value is 0. If the
+    // registry declares an enum with no zero member, the function returns
+    // a nil literal and the caller (Sema) is expected to have reported
+    // the registry inconsistency already. See the note on registry
+    // validation in `Registry.hpp`.
+    //
+    // For a handle, the zero is nil; the graph represents it as a
+    // Literal of kind Nil. The runtime resolves a Nil handle to "no
+    // resource", which is what a field with no written default should
+    // have.
+    //
+    // For an Invalid type, the function returns a nil literal. Callers
+    // should not invoke it with an Invalid type; Sema reports an error
+    // for a field with an unresolved type, and this function is not
+    // called in that case.
+
+    Literal zeroLiteralOf(TypeId type, const Registry &registry) noexcept;
 
 } // namespace lucid::sema

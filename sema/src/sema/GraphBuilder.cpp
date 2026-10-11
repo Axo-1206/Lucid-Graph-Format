@@ -37,6 +37,48 @@ namespace lucid::sema
             return UINT32_MAX;
         }
 
+        /// Resolve a resource field's written default to a Literal.
+        /// Returns a nil Literal if the value cannot be resolved; Sema
+        /// is expected to have reported the error already.
+        Literal resolveFieldValue(const BaseAST *value,
+                                  const ConstantValueMap *constants,
+                                  const DiagnosticEngine &diag,
+                                  std::vector<char> &string_pool)
+        {
+            if (value == nullptr)
+                return Literal{};
+
+            // String literals need the graph's string pool; the offset
+            // is computed here.
+            if (value->kind == ASTKind::LiteralValue)
+            {
+                const auto *lit = value->as<LiteralValueAST>();
+                if (lit->kind == LiteralKind::String)
+                {
+                    const std::string_view s =
+                        diag.stringPool()
+                            ? diag.stringPool()->lookupView(lit->text)
+                            : std::string_view{};
+                    const uint32_t offset =
+                        static_cast<uint32_t>(string_pool.size());
+                    string_pool.insert(string_pool.end(),
+                                       s.begin(), s.end());
+                    return Literal::makeString(
+                        offset, static_cast<uint32_t>(s.size()));
+                }
+            }
+
+            // Non-string values are looked up in the constant map.
+            if (constants != nullptr)
+            {
+                const Literal *folded = constants->lookup(value);
+                if (folded != nullptr)
+                    return *folded;
+            }
+
+            return Literal{};
+        }
+
     } // namespace
 
     // ─── GraphBuilder ─────────────────────────────────────────────────────────
@@ -326,34 +368,24 @@ namespace lucid::sema
             rf.type = m_types->lookup(field->type);
         }
 
+        // ─── The field's value ─────────────────────────────────────────────
+        //
+        // A resource field's value is a compile-time constant. The
+        // source may write `= value`; if it does not, the value is the
+        // type's zero. In both cases the graph stores a resolved
+        // `Literal`. The runtime never sees "no value" — every field
+        // has a value.
         if (field->defaultValue != nullptr)
         {
-            // String literals need the pool; other literals come from
-            // the constant map.
-            if (field->defaultValue->kind == ASTKind::LiteralValue)
-            {
-                const auto *lit = field->defaultValue->as<LiteralValueAST>();
-                if (lit->kind == LiteralKind::String)
-                {
-                    const std::string_view s =
-                        m_diag.stringPool()
-                            ? m_diag.stringPool()->lookupView(lit->text)
-                            : std::string_view{};
-                    const uint32_t offset = addStringToPool(s);
-                    rf.defaultValue = Literal::makeString(
-                        offset, static_cast<uint32_t>(s.size()));
-                    rf.hasDefault = true;
-                    return rf;
-                }
-            }
-
-            // Non-string default: look up in the constant map.
-            const Literal *folded = m_constants->lookup(field->defaultValue);
-            if (folded != nullptr)
-            {
-                rf.defaultValue = *folded;
-            }
-            rf.hasDefault = true;
+            // The source wrote a value. Resolve it to a Literal.
+            rf.value = resolveFieldValue(field->defaultValue, m_constants,
+                                         m_diag, m_graph.string_pool);
+        }
+        else
+        {
+            // The source did not write a value. Resolve the type's
+            // zero.
+            rf.value = zeroLiteralOf(rf.type, m_registry);
         }
 
         return rf;

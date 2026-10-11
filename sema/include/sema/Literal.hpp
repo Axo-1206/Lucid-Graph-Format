@@ -129,6 +129,108 @@ namespace lucid::sema
         bool isString() const noexcept { return kind == Kind::String; }
     };
 
+    // ─── Convenience constructors ─────────────────────────────────────────────
+    //
+    // Small factories for the fixed-width kinds. They save call sites from
+    // setting `kind` and the right union member by hand, and they make the
+    // type of the produced literal explicit.
+
+    inline Literal makeBool(bool value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Bool;
+        l.b = value;
+        return l;
+    }
+
+    inline Literal makeChar(char value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Char;
+        l.c = value;
+        return l;
+    }
+
+    inline Literal makeInt8(int8_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Int8;
+        l.i = value;
+        return l;
+    }
+
+    inline Literal makeInt16(int16_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Int16;
+        l.i = value;
+        return l;
+    }
+
+    inline Literal makeInt32(int32_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Int32;
+        l.i = value;
+        return l;
+    }
+
+    inline Literal makeInt64(int64_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Int64;
+        l.i = value;
+        return l;
+    }
+
+    inline Literal makeUInt8(uint8_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::UInt8;
+        l.u = value;
+        return l;
+    }
+
+    inline Literal makeUInt16(uint16_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::UInt16;
+        l.u = value;
+        return l;
+    }
+
+    inline Literal makeUInt32(uint32_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::UInt32;
+        l.u = value;
+        return l;
+    }
+
+    inline Literal makeUInt64(uint64_t value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::UInt64;
+        l.u = value;
+        return l;
+    }
+
+    inline Literal makeFloat32(float value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Float32;
+        l.f = value;
+        return l;
+    }
+
+    inline Literal makeFloat64(double value) noexcept
+    {
+        Literal l;
+        l.kind = Literal::Kind::Float64;
+        l.f = value;
+        return l;
+    }
+
     /// @brief The name of a Literal::Kind, for diagnostics.
     inline const char *literalKindName(Literal::Kind k) noexcept
     {

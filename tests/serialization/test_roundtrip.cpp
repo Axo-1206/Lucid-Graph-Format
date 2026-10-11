@@ -166,16 +166,14 @@ TEST_CASE("roundtrip: resources and fields with a string default",
     sema::ResourceField f0;
     f0.name = "hp";
     f0.type = sema::TypeId::primitive("int32");
-    f0.defaultValue.kind = sema::Literal::Kind::Int32;
-    f0.defaultValue.i = 100;
-    f0.hasDefault = true;
+    f0.value.kind = sema::Literal::Kind::Int32;
+    f0.value.i = 100;
     g.resource_fields.push_back(f0);
 
     sema::ResourceField f1;
     f1.name = "name";
     f1.type = sema::TypeId::primitive("string");
-    f1.defaultValue = sema::Literal::makeString(0, 6);
-    f1.hasDefault = true;
+    f1.value = sema::Literal::makeString(0, 6);
     g.resource_fields.push_back(f1);
 
     const std::vector<uint8_t> bytes = serialize(g);
@@ -193,19 +191,17 @@ TEST_CASE("roundtrip: resources and fields with a string default",
     CHECK(dr.graph->resource_fields[0].name == "hp");
     CHECK(sameTypeId(dr.graph->resource_fields[0].type,
                      g.resource_fields[0].type));
-    CHECK(dr.graph->resource_fields[0].hasDefault);
-    CHECK(dr.graph->resource_fields[0].defaultValue.kind ==
+    CHECK(dr.graph->resource_fields[0].value.kind ==
           sema::Literal::Kind::Int32);
-    CHECK(dr.graph->resource_fields[0].defaultValue.i == 100);
+    CHECK(dr.graph->resource_fields[0].value.i == 100);
 
     CHECK(dr.graph->resource_fields[1].name == "name");
     CHECK(sameTypeId(dr.graph->resource_fields[1].type,
                      g.resource_fields[1].type));
-    CHECK(dr.graph->resource_fields[1].hasDefault);
-    CHECK(dr.graph->resource_fields[1].defaultValue.kind ==
+    CHECK(dr.graph->resource_fields[1].value.kind ==
           sema::Literal::Kind::String);
-    CHECK(dr.graph->resource_fields[1].defaultValue.string.offset == 0);
-    CHECK(dr.graph->resource_fields[1].defaultValue.string.length == 6);
+    CHECK(dr.graph->resource_fields[1].value.string.offset == 0);
+    CHECK(dr.graph->resource_fields[1].value.string.length == 6);
 
     // The pool now holds the graph's literals and the interned names.
     // "player" must still be at offset 0, because the file's pool
@@ -274,9 +270,8 @@ TEST_CASE("roundtrip: identity — deserialize(serialize(g)) re-serializes "
     sema::ResourceField f;
     f.name = "speed";
     f.type = sema::TypeId::primitive("float32");
-    f.defaultValue.kind = sema::Literal::Kind::Float32;
-    f.defaultValue.f = 200.0;
-    f.hasDefault = true;
+    f.value.kind = sema::Literal::Kind::Float32;
+    f.value.f = 200.0;
     g.resource_fields.push_back(f);
 
     const std::vector<uint8_t> first = serialize(g);

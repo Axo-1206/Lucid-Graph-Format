@@ -194,6 +194,7 @@ add_library(lucid_sema STATIC
     sema/src/sema/AttributeChecker.cpp
     sema/src/sema/ImportResolver.cpp
     sema/src/sema/dump/GraphDumper.cpp
+    sema/src/sema/TypeId.cpp
 )
 
 target_include_directories(lucid_sema

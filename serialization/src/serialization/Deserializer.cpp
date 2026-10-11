@@ -359,7 +359,6 @@ namespace lucid::serialization
                 const uint8_t typeKindByte = r.u8();
                 const uint32_t typeNameOffset = r.u32();
                 const uint32_t typeNameLength = r.u32();
-                const uint8_t hasDefaultByte = r.u8();
 
                 if (r.overflowed())
                 {
@@ -411,17 +410,14 @@ namespace lucid::serialization
                     std::string_view(pool.data() + typeNameOffset,
                                      typeNameLength)};
 
-                f.hasDefault = (hasDefaultByte != 0);
-                if (f.hasDefault)
+                // The field's value is always present.
+                f.value = readLiteralPayload(r);
+                if (r.overflowed())
                 {
-                    f.defaultValue = readLiteralPayload(r);
-                    if (r.overflowed())
-                    {
-                        diags.push_back(makeError(
-                            lucid::diag::DiagCode::Ser_TruncatedSection,
-                            "Resource Fields section is truncated"));
-                        return false;
-                    }
+                    diags.push_back(makeError(
+                        lucid::diag::DiagCode::Ser_TruncatedSection,
+                        "Resource Fields section is truncated"));
+                    return false;
                 }
 
                 g.resource_fields.push_back(std::move(f));
@@ -777,12 +773,11 @@ namespace lucid::serialization
         }
         for (const ResourceField &f : g->resource_fields)
         {
-            if (f.hasDefault &&
-                f.defaultValue.kind == Literal::Kind::String)
+            if (f.value.kind == Literal::Kind::String)
             {
                 const uint32_t e =
-                    f.defaultValue.string.offset +
-                    f.defaultValue.string.length;
+                    f.value.string.offset +
+                    f.value.string.length;
                 if (e > literalEnd)
                     literalEnd = e;
             }
