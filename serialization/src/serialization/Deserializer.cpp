@@ -12,6 +12,7 @@
 #include "sema/Literal.hpp"
 #include "sema/Registry.hpp"
 #include "sema/TypeId.hpp"
+#include "sema/Registry.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -90,6 +91,8 @@ namespace lucid::serialization
                 return LiteralKind::Float32;
             case 13:
                 return LiteralKind::Float64;
+            case 14:
+                return LiteralKind::Struct;
             default:
                 return LiteralKind::Nil;
             }
@@ -107,6 +110,8 @@ namespace lucid::serialization
                 return Literal::Kind::Char;
             case LiteralKind::String:
                 return Literal::Kind::String;
+            case LiteralKind::Struct:
+                return Literal::Kind::Struct;
             case LiteralKind::Int8:
                 return Literal::Kind::Int8;
             case LiteralKind::Int16:
@@ -153,6 +158,10 @@ namespace lucid::serialization
             case Literal::Kind::String:
                 lit.string.offset = r.u32();
                 lit.string.length = r.u32();
+                break;
+            case Literal::Kind::Struct:
+                lit.struct_value.offset = r.u32();
+                lit.struct_value.length = r.u32();
                 break;
             case Literal::Kind::Int8:
                 lit.i = r.i8();
@@ -340,6 +349,7 @@ namespace lucid::serialization
         bool readResourceFieldsSection(
             detail::Reader &r, Graph &g,
             const std::vector<char> &pool,
+            Registry registry,
             std::vector<lucid::diag::Diagnostic> &diags)
         {
             const uint32_t count = r.u32();
@@ -398,6 +408,9 @@ namespace lucid::serialization
                 case TypeKind::Handle:
                     typeKind = TypeId::Kind::Handle;
                     break;
+                case TypeKind::Struct:
+                    typeKind = TypeId::Kind::Struct;
+                    break;
                 default:
                     diags.push_back(makeError(
                         lucid::diag::DiagCode::Ser_BadTypeKind,
@@ -417,6 +430,17 @@ namespace lucid::serialization
                     diags.push_back(makeError(
                         lucid::diag::DiagCode::Ser_TruncatedSection,
                         "Resource Fields section is truncated"));
+                    return false;
+                }
+
+                if (typeKind == TypeId::Kind::Struct &&
+                    registry.findStruct(
+                        std::string_view(pool.data() + typeNameOffset,
+                                         typeNameLength)) == nullptr)
+                {
+                    diags.push_back(makeError(
+                        lucid::diag::DiagCode::Ser_BadTypeKind,
+                        "Resource field names an unknown struct type"));
                     return false;
                 }
 
@@ -522,6 +546,30 @@ namespace lucid::serialization
                 diags.push_back(makeError(
                     lucid::diag::DiagCode::Ser_TruncatedSection,
                     "String Pool section is truncated"));
+                return false;
+            }
+            return true;
+        }
+
+        bool readStructPoolSection(detail::Reader &r,
+                                   std::vector<char> &out,
+                                   std::vector<lucid::diag::Diagnostic> &diags)
+        {
+            const uint32_t size = r.u32();
+            if (r.overflowed())
+            {
+                diags.push_back(makeError(
+                    lucid::diag::DiagCode::Ser_TruncatedSection,
+                    "Struct Pool section is truncated"));
+                return false;
+            }
+            out.reserve(size);
+            r.bytes(out, size);
+            if (r.overflowed())
+            {
+                diags.push_back(makeError(
+                    lucid::diag::DiagCode::Ser_TruncatedSection,
+                    "Struct Pool section is truncated"));
                 return false;
             }
             return true;
@@ -649,6 +697,7 @@ namespace lucid::serialization
         };
 
         const SectionRef *secStringPool = findSection(SectionKind::StringPool);
+        const SectionRef *secStructPool = findSection(SectionKind::StructPool);
         const SectionRef *secResources = findSection(SectionKind::Resources);
         const SectionRef *secResourceFields =
             findSection(SectionKind::ResourceFields);
@@ -674,11 +723,20 @@ namespace lucid::serialization
         auto g = std::make_unique<Graph>();
         g->registry_fingerprint = storedFingerprint;
 
-        // ─── 1. String Pool ────────────────────────────────────────────────
+        // ─── 1a. String Pool ────────────────────────────────────────────────
         {
             detail::Reader sr(bytes.subspan(secStringPool->offset,
                                             secStringPool->size));
             if (!readStringPoolSection(sr, g->string_pool, result.diagnostics))
+                return result;
+        }
+
+        // ─── 1b. Struct Pool ───────────────────────────────────────────────
+        {
+            detail::Reader sr(bytes.subspan(secStructPool->offset,
+                                            secStructPool->size));
+            if (!readStructPoolSection(sr, g->struct_value_pool,
+                                       result.diagnostics))
                 return result;
         }
 
@@ -696,6 +754,7 @@ namespace lucid::serialization
             detail::Reader sr(bytes.subspan(secResourceFields->offset,
                                             secResourceFields->size));
             if (!readResourceFieldsSection(sr, *g, g->string_pool,
+                                           registry,
                                            result.diagnostics))
                 return result;
         }

@@ -1,0 +1,6 @@
+-- A resource with a struct-typed field and a scalar field.
+
+resource Transform {
+    origin: Vector2,
+    scale:  float = 1.0,
+}

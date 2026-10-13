@@ -8,10 +8,20 @@
 /// (that needs deserialize, which arrives in Step 8.3).
 ///
 /// ─── The empty-graph file size ────────────────────────────────────────────
-/// Header:        32
-/// Section table: 8 x 12 = 96
-/// Section counts: 8 x 4 = 32
-/// Total:         160 bytes
+/// The empty graph's file has no content: just the header, the
+/// section table, and one count field per section.
+///
+///   Header:          kHeaderSize                      = 32 bytes
+///   Section table:   kSectionTableEntrySize * N       = 12 * 9  = 108
+///   Section counts:  kSectionCountSize * N            =  4 * 9  =  36
+///   Total:                                            176 bytes
+///
+/// where N == kSectionCount == 9.
+///
+/// The test derives this size from the constants, so it tracks
+/// `kSectionCount` automatically. The literal numbers above are for
+/// a reader who wants to see the arithmetic; the test does not use
+/// them.
 ///
 /// Every section is present, even when empty. The test asserts this
 /// exact size.
@@ -87,13 +97,19 @@ namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("serialize: empty graph is exactly 160 bytes",
+TEST_CASE("serialize: empty graph has the expected size",
           "[serialization][serializer]")
 {
     sema::Graph g;
     const std::vector<uint8_t> bytes = serialize(g);
 
-    CHECK(bytes.size() == 160);
+    // The empty graph's file is the header plus one section-table
+    // entry and one count field per section. Nothing else: no nodes,
+    // no args, no strings, no structs.
+    const size_t expected =
+        kHeaderSize + kSectionTableEntrySize * kSectionCount + kSectionCountSize * kSectionCount;
+
+    CHECK(bytes.size() == expected);
 }
 
 TEST_CASE("serialize: header has the correct magic and version",
@@ -127,7 +143,7 @@ TEST_CASE("serialize: header writes the registry fingerprint",
     CHECK(readU64(bytes, 8) == 0x0123456789ABCDEFULL);
 }
 
-TEST_CASE("serialize: section table lists all eight sections in order",
+TEST_CASE("serialize: section table lists all sections in order",
           "[serialization][serializer]")
 {
     sema::Graph g;
@@ -142,10 +158,12 @@ TEST_CASE("serialize: section table lists all eight sections in order",
         static_cast<uint32_t>(SectionKind::PhaseOrder),
         static_cast<uint32_t>(SectionKind::ValueOrder),
         static_cast<uint32_t>(SectionKind::StringPool),
+        static_cast<uint32_t>(SectionKind::StructPool),
     };
 
+    REQUIRE(sizeof(expectedIds) / sizeof(expectedIds[0]) == kSectionCount);
     REQUIRE(bytes.size() >= firstSectionOffset());
-    for (size_t i = 0; i < 8; ++i)
+    for (size_t i = 0; i < kSectionCount; ++i)
     {
         const SectionEntry e = readSectionEntry(bytes, i);
         CHECK(e.id == expectedIds[i]);
@@ -159,7 +177,7 @@ TEST_CASE("serialize: empty sections hold a zero count",
     sema::Graph g;
     const std::vector<uint8_t> bytes = serialize(g);
 
-    for (size_t i = 0; i < 8; ++i)
+    for (size_t i = 0; i < kSectionCount; ++i)
     {
         const size_t off = sectionOffset(bytes, i);
         REQUIRE(off + 4 <= bytes.size());

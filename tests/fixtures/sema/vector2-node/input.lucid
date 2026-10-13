@@ -1,0 +1,4 @@
+-- A value node that produces a Vector2, and a consumer that reads it.
+
+node v  = Vector2Node(1.5, -2.5)
+node ls = Vector2LengthSquaredNode(v)

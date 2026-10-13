@@ -181,10 +181,14 @@ add_executable(test_sema
     sema/test_sema_fixtures.cpp
     sema/test_pipeline_smoke.cpp
     sema/test_trigger_gating.cpp
+    sema/test_registry_validation.cpp
+    sema/test_struct_types.cpp
+    sema/test_struct_roundtrip.cpp
 )
 
 target_link_libraries(test_sema PRIVATE
     lucid_sema
+    lucid_serialization
     Catch2::Catch2WithMain
 )
 

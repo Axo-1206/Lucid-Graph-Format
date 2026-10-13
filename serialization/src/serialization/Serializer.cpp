@@ -119,6 +119,8 @@ namespace lucid::serialization
                 return LiteralKind::Float32;
             case Literal::Kind::Float64:
                 return LiteralKind::Float64;
+            case Literal::Kind::Struct:
+                return LiteralKind::Struct;
             }
             return LiteralKind::Nil;
         }
@@ -135,6 +137,8 @@ namespace lucid::serialization
                 return TypeKind::Enum;
             case TypeId::Kind::Handle:
                 return TypeKind::Handle;
+            case TypeId::Kind::Struct:
+                return TypeKind::Struct;
             }
             return TypeKind::Invalid;
         }
@@ -193,6 +197,10 @@ namespace lucid::serialization
                 break;
             case Literal::Kind::Float64:
                 w.f64(lit.f);
+                break;
+            case Literal::Kind::Struct:
+                w.u32(lit.struct_value.offset);
+                w.u32(lit.struct_value.length);
                 break;
             }
         }
@@ -380,6 +388,16 @@ namespace lucid::serialization
             w.bytes(bytes);
         }
 
+        // ─── Section: Struct Pool ──────────────────────────────────────────
+        std::vector<uint8_t> secStructPool;
+        {
+            detail::Writer w(secStructPool);
+            const auto &bytes = graph.struct_value_pool;
+            w.u32(static_cast<uint32_t>(bytes.size()));
+            for (char c : bytes)
+                w.u8(static_cast<uint8_t>(c));
+        }
+
         // ─── Step 3: assemble the file ────────────────────────────────────
         //
         // Layout: header, section table, sections.
@@ -391,7 +409,7 @@ namespace lucid::serialization
             secNodes.size() + secArgs.size() + secResources.size() +
             secResourceFields.size() + secSubscribers.size() +
             secPhaseOrder.size() + secValueOrder.size() +
-            secStringPool.size());
+            secStringPool.size() + secStructPool.size());
 
         detail::Writer w(out);
 
@@ -430,6 +448,7 @@ namespace lucid::serialization
             {SectionKind::PhaseOrder, &secPhaseOrder},
             {SectionKind::ValueOrder, &secValueOrder},
             {SectionKind::StringPool, &secStringPool},
+            {SectionKind::StructPool, &secStructPool},
         };
 
         for (const SectionEntry &s : sections)

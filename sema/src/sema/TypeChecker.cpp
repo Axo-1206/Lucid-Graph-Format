@@ -309,6 +309,17 @@ namespace lucid::sema
             return;
         }
 
+        // Struct-typed resource fields cannot have a written value.
+        // A struct value in source is a node call, and a node call is
+        // not a compile-time constant. The field is always zero.
+        if (fieldType.isStruct() && field->defaultValue != nullptr)
+        {
+            m_diag.error(DiagCode::Type_InvalidDefault, field->defaultValue,
+                         "a struct-typed resource field cannot have a "
+                         "default value; it is always zero-initialized");
+            return;
+        }
+
         if (defaultType != fieldType)
         {
             m_diag.error(DiagCode::Type_InvalidDefault, field->defaultValue,

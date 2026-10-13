@@ -1,0 +1,1 @@
+{"registryFingerprint":"18357658211656084377","stringPool":{"size":0,"bytes":""},"nodes":[],"resources":[{"index":0,"name":"Transform","fields":[{"name":"origin","type":{"kind":"Struct","name":"Vector2"},"value":{"kind":"Struct"}},{"name":"scale","type":{"kind":"Primitive","name":"float32"},"value":{"kind":"Float32","value":1}}]}],"phaseOrder":[],"valueOrder":[]}

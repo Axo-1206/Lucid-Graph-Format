@@ -35,6 +35,28 @@
 /// The boundary between the two regions is not stored in the file.
 /// The loader recovers it from the literals' extents (see
 /// `Graph::literal_pool_size` in `sema/Graph.hpp`).
+///
+/// ─── The struct literal, on disk ──────────────────────────────────────────
+/// A `Literal::Kind::Struct` is written as the literal-kind byte (14)
+/// followed by an 8-byte payload: a 4-byte offset and a 4-byte length,
+/// both little-endian. The bytes at `[offset, offset + length)` in the
+/// graph's Struct Pool are the struct value's fields, laid out in the
+/// struct type's declared field order.
+///
+/// ─── File sizes for reference ─────────────────────────────────────────────
+/// An empty graph (no nodes, no args, no resources, no string literals)
+/// produces a file of size:
+///
+///   32                       (header)
+/// + 12 * kSectionCount       (section table: 12 bytes per entry)
+/// +  4 * kSectionCount       (one 4-byte count per section)
+/// = 32 + 16 * kSectionCount
+///
+/// For v3, kSectionCount == 9, so the empty-graph file is 32 + 144 = 176
+/// bytes.
+///
+/// A change to kSectionCount changes this number; a change to any
+/// section's *content* does not.
 
 #pragma once
 
@@ -74,10 +96,11 @@ namespace lucid::serialization::format
         PhaseOrder = 0x00000006,
         ValueOrder = 0x00000007,
         StringPool = 0x00000008,
+        StructPool = 0x00000009,
     };
 
     /// The number of sections version 1 defines.
-    inline constexpr uint32_t kSectionCount = 8;
+    inline constexpr uint32_t kSectionCount = 9;
 
     // ─── Arg kinds ────────────────────────────────────────────────────────────
 
@@ -111,6 +134,7 @@ namespace lucid::serialization::format
         UInt64 = 11,
         Float32 = 12,
         Float64 = 13,
+        Struct = 14,
     };
 
     // ─── TypeId kinds ─────────────────────────────────────────────────────────
@@ -121,6 +145,7 @@ namespace lucid::serialization::format
         Primitive = 1,
         Enum = 2,
         Handle = 3,
+        Struct = 4,
     };
 
     // ─── Fixed record sizes ───────────────────────────────────────────────────

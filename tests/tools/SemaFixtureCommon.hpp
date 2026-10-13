@@ -58,9 +58,22 @@ namespace lucid::tests::sema_fixtures
         std::vector<sema::EnumMemberInfo> keyMembers;
         std::vector<sema::EnumTypeInfo> enums;
         std::vector<sema::HandleTypeInfo> handles;
+
+        // ─── Struct types ──────────────────────────────────────────────
+        //
+        // The fixture registry declares one struct type, `Vector2`, with
+        // two `float32` fields. Fixtures that want a struct value
+        // reference it through `Vector2Node`, a Value node whose result
+        // is a `Vector2`.
+
+        std::vector<sema::StructFieldInfo> vec2Fields;
+        std::vector<sema::StructTypeInfo> structs;
+
         std::vector<sema::NodeArgInfo> floatArgs;
         std::vector<sema::NodeArgInfo> actionArgs;
         std::vector<sema::NodeArgInfo> printArgs;
+        std::vector<sema::NodeArgInfo> vec2CtorArgs;
+        std::vector<sema::NodeArgInfo> vec2ConsumerArgs;
         std::vector<sema::NodeTypeInfo> nodeTypes;
         sema::Registry registry;
 
@@ -73,6 +86,17 @@ namespace lucid::tests::sema_fixtures
                             keyMembers.data(), keyMembers.size())});
             handles.push_back({"BodyRef"});
 
+            // ─── Vector2 struct ────────────────────────────────────────
+            vec2Fields.push_back(
+                {"x", sema::TypeId::primitive("float32")});
+            vec2Fields.push_back(
+                {"y", sema::TypeId::primitive("float32")});
+            structs.push_back(
+                {"Vector2",
+                 ArenaSpan<sema::StructFieldInfo>(vec2Fields.data(),
+                                                  vec2Fields.size())});
+
+            // ─── Value nodes ───────────────────────────────────────────
             floatArgs.push_back({"value", sema::TypeId::primitive("float32")});
             nodeTypes.push_back(
                 {"Float32Node", sema::NodeKind::Value, "Math", 0,
@@ -80,6 +104,25 @@ namespace lucid::tests::sema_fixtures
                                               floatArgs.size()),
                  sema::TypeId::primitive("float32")});
 
+            vec2CtorArgs.push_back(
+                {"x", sema::TypeId::primitive("float32")});
+            vec2CtorArgs.push_back(
+                {"y", sema::TypeId::primitive("float32")});
+            nodeTypes.push_back(
+                {"Vector2Node", sema::NodeKind::Value, "Math", 0,
+                 ArenaSpan<sema::NodeArgInfo>(vec2CtorArgs.data(),
+                                              vec2CtorArgs.size()),
+                 sema::TypeId::structType("Vector2")});
+
+            vec2ConsumerArgs.push_back(
+                {"v", sema::TypeId::structType("Vector2")});
+            nodeTypes.push_back(
+                {"Vector2LengthSquaredNode", sema::NodeKind::Value, "Math", 0,
+                 ArenaSpan<sema::NodeArgInfo>(vec2ConsumerArgs.data(),
+                                              vec2ConsumerArgs.size()),
+                 sema::TypeId::primitive("float32")});
+
+            // ─── Action nodes ──────────────────────────────────────────
             actionArgs.push_back({"body", sema::TypeId::handle("BodyRef")});
             nodeTypes.push_back(
                 {"MoveBody", sema::NodeKind::Action, "Physics", 0,
@@ -94,16 +137,21 @@ namespace lucid::tests::sema_fixtures
                                               printArgs.size()),
                  sema::TypeId{}});
 
+            // ─── Trigger nodes ─────────────────────────────────────────
             nodeTypes.push_back(
                 {"EveryFrame", sema::NodeKind::Trigger, "Flow", 0,
                  ArenaSpan<sema::NodeArgInfo>{}, sema::TypeId{}});
 
+            // ─── Registry ──────────────────────────────────────────────
             registry.phases =
                 ArenaSpan<sema::PhaseInfo>(phases.data(), phases.size());
             registry.enums =
                 ArenaSpan<sema::EnumTypeInfo>(enums.data(), enums.size());
             registry.handles =
                 ArenaSpan<sema::HandleTypeInfo>(handles.data(), handles.size());
+            registry.structs =
+                ArenaSpan<sema::StructTypeInfo>(structs.data(),
+                                                structs.size());
             registry.nodeTypes =
                 ArenaSpan<sema::NodeTypeInfo>(nodeTypes.data(),
                                               nodeTypes.size());
