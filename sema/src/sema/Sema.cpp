@@ -54,8 +54,8 @@ namespace lucid::sema
                 diag.setCurrentFile(previous);
             }
 
-            ScopedDiagFile(const ScopedDiagFile &)             = delete;
-            ScopedDiagFile &operator=(const ScopedDiagFile &)  = delete;
+            ScopedDiagFile(const ScopedDiagFile &) = delete;
+            ScopedDiagFile &operator=(const ScopedDiagFile &) = delete;
         };
 
         // ─── Module name from path ─────────────────────────────────────────────
@@ -166,12 +166,20 @@ namespace lucid::sema
             if (rootModule == nullptr)
                 return result;
 
+            // ─── Validate the registry ─────────────────────────────────────
+            if (!validateRegistry(registry, diag))
+            {
+                result.ok = false;
+                result.diagnostics = diag.all();
+                return result;
+            }
+
             // ─── Load imports ──────────────────────────────────────────────
             ModuleSet moduleSet = resolveImports(rootModule, rootPath,
                                                  options, pool, arena, diag);
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
@@ -184,7 +192,7 @@ namespace lucid::sema
             }
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
@@ -198,7 +206,7 @@ namespace lucid::sema
             }
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
@@ -207,7 +215,7 @@ namespace lucid::sema
             mergeExports(moduleSet, symbols, pool, diag);
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
@@ -232,13 +240,13 @@ namespace lucid::sema
             }
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
 
             // ─── Pass 3: type checking ─────────────────────────────────────
-            std::vector<TypeMap>          types(moduleSet.modules.size());
+            std::vector<TypeMap> types(moduleSet.modules.size());
             std::vector<ConstantValueMap> constants(moduleSet.modules.size());
             for (size_t i = 0; i < moduleSet.modules.size(); ++i)
             {
@@ -248,7 +256,7 @@ namespace lucid::sema
             }
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
@@ -271,7 +279,7 @@ namespace lucid::sema
                 buildGraphFromModules(contexts, registry, pool, diag);
             if (diag.hasErrors())
             {
-                result.ok          = false;
+                result.ok = false;
                 result.diagnostics = diag.all();
                 return result;
             }
@@ -284,8 +292,8 @@ namespace lucid::sema
                               registry, diag);
             }
 
-            result.ok          = true;
-            result.graph       = std::move(graph);
+            result.ok = true;
+            result.graph = std::move(graph);
             result.diagnostics = diag.all();
             return result;
         }
@@ -312,8 +320,8 @@ namespace lucid::sema
         if (diag.hasErrors())
         {
             CompileResult result;
-            result.ok          = false;
-            result.graph       = nullptr;
+            result.ok = false;
+            result.graph = nullptr;
             result.diagnostics = diag.all();
             return result;
         }

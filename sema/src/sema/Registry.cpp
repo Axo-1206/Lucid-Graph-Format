@@ -32,9 +32,12 @@
 /// checksum library) would add dependencies for negligible benefit.
 
 #include "sema/Registry.hpp"
+#include "sema/Primitives.hpp"
+#include "core/SourceLocation.hpp"
 
 #include <cstdint>
 #include <string_view>
+#include <unordered_set>
 
 namespace lucid::sema
 {
@@ -159,7 +162,127 @@ namespace lucid::sema
             }
         }
 
+        // ─── Struct Helpers ───────────────────────────────────────────────
+
+        bool enumHasZeroMember(const EnumTypeInfo &info) noexcept
+        {
+            for (const EnumMemberInfo &m : info.members)
+                if (m.value == 0)
+                    return true;
+            return false;
+        }
+
+        /// True if `type` names a type the registry declares.
+        /// Primitive names are always considered declared.
+        bool typeIsDeclared(const Registry &r, const TypeId &type) noexcept
+        {
+            switch (type.kind)
+            {
+            case TypeId::Kind::Invalid:
+                return false;
+            case TypeId::Kind::Primitive:
+                return isCanonicalPrimitive(type.name);
+            case TypeId::Kind::Enum:
+                return r.findEnum(type.name) != nullptr;
+            case TypeId::Kind::Handle:
+                return r.findHandle(type.name) != nullptr;
+            case TypeId::Kind::Struct:
+                return r.findStruct(type.name) != nullptr;
+            }
+            return false;
+        }
+
+        /// DFS over the struct reference graph. Marks each visited
+        /// struct; reports a diagnostic if a struct is re-entered
+        /// before it is finished.
+        bool visitStruct(const Registry &r,
+                         const StructTypeInfo &s,
+                         std::unordered_set<std::string_view> &visiting,
+                         std::unordered_set<std::string_view> &visited,
+                         lucid::diag::DiagnosticEngine &diag)
+        {
+            if (visited.count(s.name))
+                return true;
+            if (visiting.count(s.name))
+            {
+                diag.errorAt(lucid::diag::DiagCode::Registry_StructCycle,
+                             SourceLocation{1, 1},
+                             "struct '", s.name,
+                             "' contains itself, directly or "
+                             "transitively");
+                return false;
+            }
+
+            visiting.insert(s.name);
+            for (const StructFieldInfo &f : s.fields)
+            {
+                if (f.type.kind == TypeId::Kind::Struct)
+                {
+                    const StructTypeInfo *sub = r.findStruct(f.type.name);
+                    if (sub == nullptr)
+                        continue; // reported separately
+                    if (!visitStruct(r, *sub, visiting, visited, diag))
+                        return false;
+                }
+            }
+            visiting.erase(s.name);
+            visited.insert(s.name);
+            return true;
+        }
+
     } // namespace
+
+    bool validateRegistry(const Registry &registry,
+                          lucid::diag::DiagnosticEngine &diag)
+    {
+        bool ok = true;
+
+        // ─── Every enum has a zero member ──────────────────────────────
+        for (const EnumTypeInfo &info : registry.enums)
+        {
+            if (!enumHasZeroMember(info))
+            {
+                diag.errorAt(lucid::diag::DiagCode::Registry_EnumWithoutZero,
+                             SourceLocation{1, 1},
+                             "enum '", info.name,
+                             "' has no member with value 0; a resource "
+                             "field of this type cannot be "
+                             "zero-initialized");
+                ok = false;
+            }
+        }
+
+        // ─── Every struct field names a declared type ──────────────────
+        for (const StructTypeInfo &s : registry.structs)
+        {
+            for (const StructFieldInfo &f : s.fields)
+            {
+                if (!typeIsDeclared(registry, f.type))
+                {
+                    diag.errorAt(
+                        lucid::diag::DiagCode::Registry_UnknownFieldType,
+                        SourceLocation{1, 1},
+                        "struct '", s.name, "' has field '", f.name,
+                        "' of unknown type '", f.type.name, "'");
+                    ok = false;
+                }
+            }
+        }
+
+        // ─── The struct reference graph is acyclic ─────────────────────
+        std::unordered_set<std::string_view> visiting;
+        std::unordered_set<std::string_view> visited;
+        for (const StructTypeInfo &s : registry.structs)
+        {
+            if (!visitStruct(registry, s, visiting, visited, diag))
+            {
+                ok = false;
+                break; // one cycle is enough
+            }
+        }
+
+        return ok;
+    }
 
     // ─── Public entry point ───────────────────────────────────────────────────
 

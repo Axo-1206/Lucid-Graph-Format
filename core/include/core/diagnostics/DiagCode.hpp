@@ -319,6 +319,19 @@ namespace lucid::diag
         Ser_FingerprintMismatch = 6041, // the file's registry differs from ours
 
         // ═════════════════════════════════════════════════════════════════════════
+        // REGISTRY (6200-6299)
+        // ═════════════════════════════════════════════════════════════════════════
+        //
+        // Errors in the engine's Registry. These are the engine
+        // team's bugs, not the script writer's. Sema reports them
+        // once, at the start of a compile, before any source is
+        // analyzed.
+
+        Registry_EnumWithoutZero = 6201,
+        Registry_UnknownFieldType = 6202,
+        Registry_StructCycle = 6203,
+
+        // ═════════════════════════════════════════════════════════════════════════
         // INTERNAL / PANIC (7000-7099)
         // ═════════════════════════════════════════════════════════════════════════
         //

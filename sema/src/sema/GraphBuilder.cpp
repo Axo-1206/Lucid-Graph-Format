@@ -113,6 +113,12 @@ namespace lucid::sema
         void buildPhaseOrder();
         void buildValueOrder();
 
+        // ─── Struct ───────────────────────────────────────────────────────
+
+        Literal zeroStructValue(const TypeId &type);
+        void appendZeroFieldBytes(const TypeId &type);
+        void appendLiteralWireBytes(const Literal &lit);
+
         // ─── Helpers ───────────────────────────────────────────────────────
         Literal literalFor(const BaseAST *value) const;
         uint32_t addStringToPool(std::string_view s);
@@ -383,9 +389,10 @@ namespace lucid::sema
         }
         else
         {
-            // The source did not write a value. Resolve the type's
-            // zero.
-            rf.value = zeroLiteralOf(rf.type, m_registry);
+            if (rf.type.kind == TypeId::Kind::Struct)
+                rf.value = zeroStructValue(rf.type);
+            else
+                rf.value = zeroLiteralOf(rf.type, m_registry);
         }
 
         return rf;
@@ -731,6 +738,192 @@ namespace lucid::sema
         }
 
         m_graph.value_order = std::move(order);
+    }
+
+    /// Build the zero value of a struct type, appending its bytes to
+    /// the graph's struct-value pool. Returns a `Literal` of kind
+    /// `Struct` holding the (offset, length) into the pool.
+    ///
+    /// Recurses: a struct field of struct type produces its own zero
+    /// and its bytes are included in the parent's layout.
+    ///
+    /// Returns `Literal{}` if the type is not a struct, or if the
+    /// struct's fields cannot be resolved.
+    Literal GraphBuilder::zeroStructValue(const TypeId &type)
+    {
+        if (type.kind != TypeId::Kind::Struct)
+            return Literal{};
+
+        const StructTypeInfo *info = m_registry.findStruct(type.name);
+        if (info == nullptr)
+            return Literal{};
+
+        const uint32_t offset =
+            static_cast<uint32_t>(m_graph.struct_value_pool.size());
+
+        for (const StructFieldInfo &field : info->fields)
+        {
+            appendZeroFieldBytes(field.type);
+        }
+
+        const uint32_t length =
+            static_cast<uint32_t>(m_graph.struct_value_pool.size()) - offset;
+
+        return makeStruct(offset, length);
+    }
+
+    /// Append the zero bytes of one field's type to the struct-value
+    /// pool. Dispatches on the field type's kind.
+    void GraphBuilder::appendZeroFieldBytes(const TypeId &type)
+    {
+        switch (type.kind)
+        {
+        case TypeId::Kind::Primitive:
+        case TypeId::Kind::Enum:
+        case TypeId::Kind::Handle:
+        {
+            // The field's zero is a Literal; append its wire bytes.
+            const Literal zero = zeroLiteralOf(type, m_registry);
+            appendLiteralWireBytes(zero);
+            return;
+        }
+
+        case TypeId::Kind::Struct:
+        {
+            // Recurse: append the nested struct's zero.
+            const StructTypeInfo *info = m_registry.findStruct(type.name);
+            if (info == nullptr)
+                return;
+            for (const StructFieldInfo &sub : info->fields)
+            {
+                appendZeroFieldBytes(sub.type);
+            }
+            return;
+        }
+
+        case TypeId::Kind::Invalid:
+            return;
+        }
+    }
+
+    /// Append the wire-form bytes of a primitive/enum/handle literal
+    /// to the struct-value pool. This is the same layout the serializer
+    /// uses for a struct field; it must match byte-for-byte.
+    void GraphBuilder::appendLiteralWireBytes(const Literal &lit)
+    {
+        // The exact byte layout matches `serialization::format`'s
+        // primitives. In practice this is:
+        //   bool  → 1 byte (0/1)
+        //   char  → 1 byte
+        //   int8  → 1 byte
+        //   int16 → 2 bytes LE
+        //   int32 → 4 bytes LE
+        //   int64 → 8 bytes LE
+        //   uint8..uint64 → same, unsigned
+        //   float32 → 4 bytes LE IEEE-754
+        //   float64 → 8 bytes LE IEEE-754
+        //   enum  → 8 bytes LE (Int64)
+        //   handle → 4 bytes LE (the handle's id; nil is 0)
+        //
+        // The graph builder writes these bytes directly. A helper
+        // shared with the serializer would be cleaner; for now,
+        // duplicate the layout.
+        //
+        // (See `appendZeroFieldBytes` callers — this is only used for
+        // zeros, so a `zero` literal of any kind is written here.)
+        switch (lit.kind)
+        {
+        case Literal::Kind::Nil:
+            m_graph.struct_value_pool.push_back(0);
+            return;
+        case Literal::Kind::Bool:
+            m_graph.struct_value_pool.push_back(lit.b ? 1 : 0);
+            return;
+        case Literal::Kind::Char:
+            m_graph.struct_value_pool.push_back(static_cast<char>(lit.c));
+            return;
+        case Literal::Kind::Int8:
+            m_graph.struct_value_pool.push_back(static_cast<char>(lit.i));
+            return;
+        case Literal::Kind::Int16:
+        {
+            const int16_t v = static_cast<int16_t>(lit.i);
+            m_graph.struct_value_pool.push_back(static_cast<char>(v & 0xFF));
+            m_graph.struct_value_pool.push_back(static_cast<char>((v >> 8) & 0xFF));
+            return;
+        }
+        case Literal::Kind::Int32:
+        {
+            const int32_t v = static_cast<int32_t>(lit.i);
+            for (int i = 0; i < 4; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+            return;
+        }
+        case Literal::Kind::Int64:
+        {
+            const int64_t v = lit.i;
+            for (int i = 0; i < 8; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+            return;
+        }
+        case Literal::Kind::UInt8:
+            m_graph.struct_value_pool.push_back(static_cast<char>(lit.u));
+            return;
+        case Literal::Kind::UInt16:
+        {
+            const uint16_t v = static_cast<uint16_t>(lit.u);
+            m_graph.struct_value_pool.push_back(static_cast<char>(v & 0xFF));
+            m_graph.struct_value_pool.push_back(static_cast<char>((v >> 8) & 0xFF));
+            return;
+        }
+        case Literal::Kind::UInt32:
+        {
+            const uint32_t v = static_cast<uint32_t>(lit.u);
+            for (int i = 0; i < 4; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+            return;
+        }
+        case Literal::Kind::UInt64:
+        {
+            const uint64_t v = lit.u;
+            for (int i = 0; i < 8; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+            return;
+        }
+        case Literal::Kind::Float32:
+        {
+            uint32_t bits;
+            std::memcpy(&bits, &lit.f, 4);
+            for (int i = 0; i < 4; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((bits >> (8 * i)) & 0xFF));
+            return;
+        }
+        case Literal::Kind::Float64:
+        {
+            uint64_t bits;
+            std::memcpy(&bits, &lit.f, 8);
+            for (int i = 0; i < 8; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((bits >> (8 * i)) & 0xFF));
+            return;
+        }
+        case Literal::Kind::String:
+        {
+            // A string field's zero is an empty string. Its bytes are
+            // (offset, length) into the graph's string pool; for the
+            // zero, offset is the current end of the pool, length is 0.
+            // The wire form for a struct field of string type is
+            // (offset, length), 8 bytes total.
+            const uint32_t off = static_cast<uint32_t>(m_graph.string_pool.size());
+            for (int i = 0; i < 4; ++i)
+                m_graph.struct_value_pool.push_back(static_cast<char>((off >> (8 * i)) & 0xFF));
+            for (int i = 0; i < 4; ++i)
+                m_graph.struct_value_pool.push_back(0);
+            return;
+        }
+        case Literal::Kind::Struct:
+            // Recursive case is handled by `appendZeroFieldBytes`.
+            return;
+        }
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

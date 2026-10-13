@@ -26,6 +26,7 @@
 #pragma once
 
 #include "core/memory/ArenaSpan.hpp"
+#include "core/diagnostics/Diagnostic.hpp"
 #include "sema/Literal.hpp"
 #include "sema/NodeKind.hpp"
 #include "sema/TypeId.hpp"
@@ -62,6 +63,37 @@ namespace lucid::sema
     struct HandleTypeInfo
     {
         std::string_view name;
+    };
+
+    // ─── Structs ──────────────────────────────────────────────────────────────
+
+    /// @brief One field of a struct type.
+    ///
+    /// A field's type is a primitive, an enum, a handle, or another
+    /// struct. Recursion is allowed but the registry must not contain a
+    /// cycle of struct references; Sema validates this at startup.
+    struct StructFieldInfo
+    {
+        std::string_view name;
+        TypeId type;
+    };
+
+    /// @brief One struct type declared by the engine.
+    ///
+    /// A struct is a compound value: a named set of fields, each with
+    /// its own type. Structs are values — they are copied on
+    /// assignment, stored in columns, and passed between nodes. The
+    /// engine declares structs so that nodes can accept and produce
+    /// compound values (a `Vector2`, a `Color`, a `Transform`).
+    ///
+    /// The field order is the order of the `fields` span. The runtime
+    /// lays out a struct value with the fields in this order, and the
+    /// serializer writes them in this order. Do not reorder a struct's
+    /// fields without regenerating every `.lucgraph` that uses it.
+    struct StructTypeInfo
+    {
+        std::string_view name;
+        ArenaSpan<StructFieldInfo> fields;
     };
 
     // ─── Node arguments ───────────────────────────────────────────────────────
@@ -114,8 +146,52 @@ namespace lucid::sema
         ArenaSpan<PhaseInfo> phases;
         ArenaSpan<EnumTypeInfo> enums;
         ArenaSpan<HandleTypeInfo> handles;
+        ArenaSpan<StructTypeInfo> structs;
         ArenaSpan<NodeTypeInfo> nodeTypes;
+
+        /// Find a struct type by name. Returns nullptr if the name is
+        /// not a declared struct.
+        const StructTypeInfo *findStruct(std::string_view name) const noexcept
+        {
+            for (const StructTypeInfo &s : structs)
+                if (s.name == name)
+                    return &s;
+            return nullptr;
+        }
+
+        /// Find an enum type by name. Returns nullptr if the name is
+        /// not a declared enum.
+        const EnumTypeInfo *findEnum(std::string_view name) const noexcept
+        {
+            for (const EnumTypeInfo &e : enums)
+                if (e.name == name)
+                    return &e;
+            return nullptr;
+        }
+
+        /// Find a handle type by name. Returns nullptr if the name is
+        /// not a declared handle.
+        const HandleTypeInfo *findHandle(std::string_view name) const noexcept
+        {
+            for (const HandleTypeInfo &h : handles)
+                if (h.name == name)
+                    return &h;
+            return nullptr;
+        }
     };
+
+    /// Validate the registry's contents. Called by Sema at the start of
+    /// every compile. Reports an error and returns false if the
+    /// registry is malformed:
+    ///
+    ///   - An enum has no member with value 0. (A resource field of
+    ///     enum type with no written value cannot be zero-initialized.)
+    ///   - A struct field names a type the registry does not declare.
+    ///   - The struct reference graph has a cycle.
+    ///
+    /// A well-formed registry produces no diagnostics and returns true.
+    bool validateRegistry(const Registry &registry,
+                          lucid::diag::DiagnosticEngine &diag);
 
     /// @brief Compute a stable fingerprint of the registry's contents.
     ///

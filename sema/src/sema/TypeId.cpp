@@ -107,6 +107,19 @@ namespace lucid::sema
         case TypeId::Kind::Handle:
             // A handle's zero is nil.
             return Literal::makeNil();
+
+        case TypeId::Kind::Struct:
+            // A struct's zero is resolved by the graph builder, which
+            // has the registry (to look up the struct's fields) and
+            // the graph's struct-value pool (to write the bytes to).
+            // `zeroLiteralOf` returns an unresolved literal; the
+            // graph builder substitutes a real struct value.
+            //
+            // In practice this branch is not reached: the graph
+            // builder checks the type's kind before calling
+            // `zeroLiteralOf` and dispatches structs to
+            // `zeroStructValue`.
+            return Literal{};
         }
 
         return Literal{};

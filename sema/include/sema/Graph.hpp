@@ -169,7 +169,26 @@ namespace lucid::sema
         std::vector<NodeIndex> subscribers;
         std::vector<NodeIndex> phase_order;
         std::vector<NodeIndex> value_order;
+
+        /// String literals. A `Literal` of kind `String` holds an
+        /// `(offset, length)` into this pool.
         std::vector<char> string_pool;
+
+        /// Struct constant values. A `Literal` of kind `Struct` holds an
+        /// `(offset, length)` into this pool.
+        ///
+        /// The pool holds only *compile-time constant* struct values —
+        /// the structs Sema folded from source. Struct values produced
+        /// by value nodes at runtime live in the runtime's execution
+        /// context, not in the graph.
+        ///
+        /// A struct value's bytes are its fields laid out in the
+        /// struct type's declared field order. The layout of each
+        /// field is the field type's own wire form (a `float32` is
+        /// 4 bytes, a `Vector2` field is the layout of a `Vector2`,
+        /// and so on). The library does not pad struct fields; the
+        /// pool is packed.
+        std::vector<char> struct_value_pool;
 
         /// The number of bytes at the start of `string_pool` that are
         /// the graph's own string literals.

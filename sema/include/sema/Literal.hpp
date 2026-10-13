@@ -57,6 +57,7 @@ namespace lucid::sema
             UInt64,
             Float32,
             Float64,
+            Struct,
         };
 
         /// Which kind of literal this is. Determines which union member
@@ -85,6 +86,11 @@ namespace lucid::sema
                 uint32_t offset;
                 uint32_t length;
             } string;
+            struct
+            {
+                uint32_t offset;
+                uint32_t length;
+            } struct_value;
         };
 
         // ─── Construction ──────────────────────────────────────────────────
@@ -127,6 +133,8 @@ namespace lucid::sema
         }
 
         bool isString() const noexcept { return kind == Kind::String; }
+
+        bool isStruct() const noexcept { return kind == Kind::Struct; }
     };
 
     // ─── Convenience constructors ─────────────────────────────────────────────
@@ -231,6 +239,15 @@ namespace lucid::sema
         return l;
     }
 
+    inline Literal makeStruct(uint32_t offset, uint32_t length) noexcept
+    {
+        Literal lit;
+        lit.kind = Literal::Kind::Struct;
+        lit.struct_value.offset = offset;
+        lit.struct_value.length = length;
+        return lit;
+    }
+
     /// @brief The name of a Literal::Kind, for diagnostics.
     inline const char *literalKindName(Literal::Kind k) noexcept
     {
@@ -264,6 +281,8 @@ namespace lucid::sema
             return "Float32";
         case Literal::Kind::Float64:
             return "Float64";
+        case Literal::Kind::Struct:
+            return "Struct";
         }
         return "Unknown";
     }

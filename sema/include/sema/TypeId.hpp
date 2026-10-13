@@ -38,6 +38,7 @@ namespace lucid::sema
             Primitive,
             Enum,
             Handle,
+            Struct,
         };
 
         /// Which category the type belongs to.
@@ -72,12 +73,18 @@ namespace lucid::sema
             return TypeId{Kind::Handle, n};
         }
 
+        static TypeId structType(std::string_view n)
+        {
+            return TypeId{Kind::Struct, n};
+        }
+
         // ─── Queries ───────────────────────────────────────────────────────
 
         bool isValid() const noexcept { return kind != Kind::Invalid; }
         bool isPrimitive() const noexcept { return kind == Kind::Primitive; }
         bool isEnum() const noexcept { return kind == Kind::Enum; }
         bool isHandle() const noexcept { return kind == Kind::Handle; }
+        bool isStruct() const noexcept { return kind == Kind::Struct; }
 
         /// True if this is a value type. Every kind except Invalid is a
         /// value type: a primitive is a value, an enum member is a value,
@@ -115,6 +122,8 @@ namespace lucid::sema
             return "Enum";
         case TypeId::Kind::Handle:
             return "Handle";
+        case TypeId::Kind::Struct:
+            return "Struct";
         }
         return "Unknown";
     }

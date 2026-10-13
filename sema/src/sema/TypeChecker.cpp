@@ -75,6 +75,12 @@ namespace lucid::sema
             return nullptr;
         }
 
+        const StructTypeInfo *lookupStruct(const Registry &registry,
+                                           std::string_view name)
+        {
+            return registry.findStruct(name);
+        }
+
         // ─── parseIntegerLiteral helper ──────────────────────────────────────────────
 
         int64_t parseIntegerLiteral(std::string_view text)
@@ -769,6 +775,14 @@ namespace lucid::sema
         if (lookupHandleType(m_registry, canonical) != nullptr)
         {
             const TypeId t = TypeId::handle(canonical);
+            m_types.record(type, t);
+            return t;
+        }
+
+        // ─── Struct ────────────────────────────────────────────────────────
+        if (lookupStruct(m_registry, canonical) != nullptr)
+        {
+            const TypeId t = TypeId::structType(canonical);
             m_types.record(type, t);
             return t;
         }
