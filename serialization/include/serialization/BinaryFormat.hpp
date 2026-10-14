@@ -52,8 +52,8 @@
 /// +  4 * kSectionCount       (one 4-byte count per section)
 /// = 32 + 16 * kSectionCount
 ///
-/// For v3, kSectionCount == 9, so the empty-graph file is 32 + 144 = 176
-/// bytes.
+/// For the current version, kSectionCount == 9, so the empty-graph file
+/// is 32 + 144 = 176 bytes.
 ///
 /// A change to kSectionCount changes this number; a change to any
 /// section's *content* does not.

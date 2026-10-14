@@ -55,9 +55,10 @@ The format library declares:
 - `NodeKind` — the enum with three values.
 - `NodeTypeInfo` — the struct with a name, kind, category, phase,
   argument list, and result type.
-- `TypeId` — the tagged type reference.
-- `PhaseInfo`, `EnumTypeInfo`, `EnumMemberInfo`, `HandleTypeInfo`
-  — the other declarations.
+- `TypeId` — the tagged type reference. A type is a primitive, an
+  enum, a handle, or a struct.
+- `PhaseInfo`, `EnumTypeInfo`, `EnumMemberInfo`, `HandleTypeInfo`,
+  `StructTypeInfo`, `StructFieldInfo` — the other declarations.
 
 These types live in the format library's headers. The engine
 includes them to construct a registry.
@@ -93,11 +94,12 @@ defines to check the content the engine provided. It produces a
 | Phase ordering rules                                        | The concept            | The actual phases         |
 | Node type names                                             | —                      | The names                 |
 | Node arguments (names, types)                               | The shape              | The values                |
-| Type kinds (`Primitive`, `Enum`, `Handle`)                  | The enum               | —                         |
+| Type kinds (`Primitive`, `Enum`, `Handle`, `Struct`)        | The enum               | —                         |
 | Which kind a type has                                       | —                      | The kind, in the registry |
 | Type names                                                  | —                      | The names                 |
 | Enum members and values                                     | —                      | The members, the values   |
 | Handle type names                                           | —                      | The names                 |
+| Struct type names and fields                                | The shape              | The names, the fields     |
 | Sema's checks                                               | The checks             | —                         |
 | Runtime behavior of nodes                                   | —                      | The behavior              |
 
@@ -340,8 +342,9 @@ The implications for Sema and the CLI:
    Three values. No more.
 
 2. **The registry is a data structure.** A struct holding spans of
-   `NodeTypeInfo`, `EnumTypeInfo`, `HandleTypeInfo`, and
-   `PhaseInfo`. Built by the engine. Read by Sema.
+   `NodeTypeInfo`, `EnumTypeInfo`, `HandleTypeInfo`,
+   `StructTypeInfo`, and `PhaseInfo`. Built by the engine. Read by
+   Sema.
 
 3. **Sema has no hard-coded node types.** It looks up every node
    type by name in the registry. It never references `MoveBody` or
@@ -433,8 +436,9 @@ them; the format library owns them.
   name function.
 - `sema/include/sema/Registry.hpp` — the registry structs
   (`NodeTypeInfo`, `NodeArgInfo`, `EnumTypeInfo`, `EnumMemberInfo`,
-  `HandleTypeInfo`, `PhaseInfo`, `Registry`) and the
-  `computeRegistryFingerprint` declaration.
+  `HandleTypeInfo`, `StructTypeInfo`, `StructFieldInfo`,
+  `PhaseInfo`, `Registry`) and the `computeRegistryFingerprint` and
+  `validateRegistry` declarations.
 - `sema/include/sema/TypeId.hpp` — the tagged type reference.
 - `sema/include/sema/Literal.hpp` — the compile-time value type.
 - `sema/include/sema/Graph.hpp` — the graph structs (`Graph`,
@@ -457,6 +461,20 @@ engine team writes to honor it. The sample is a compilable
 registry for a small engine — enough to compile the sample
 programs in the README and to load the `.lucgraph` files they
 produce.
+
+### 14.0 A note on the sample
+
+The sample below uses types and functions the engine defines: `Body`,
+`Vector2`, `ExecutionContext`, `resolveBody`, `readFile`, `writeFile`,
+and so on. They are shown by name because the *shape* of the code is
+what matters, not the helpers' bodies. A reader who is implementing a
+real engine supplies these; the format library does not.
+
+What the sample must get *right* is the interface to the library: the
+`NodeExecutor` signature, the `argsOf` and `subscribersOf` accessors,
+and the correspondence between `NodeInstance::type_id` and the engine's
+`executors` array. Those are the parts the library depends on; the rest
+is the engine's to design.
 
 ### 14.1 The header
 
@@ -531,6 +549,31 @@ namespace my_engine
             {"TextureRef"},
         };
 
+        // ─── Structs ──────────────────────────────────────────────────────
+        //
+        // A struct is a compound value: a named set of fields, each
+        // with its own type. The engine declares structs so that node
+        // types can accept and produce compound values.
+        //
+        // Structs are values: copied on assignment, stored in the
+        // graph's struct pool when constant, held by the runtime
+        // otherwise. The library never inspects a struct's fields; it
+        // knows only the type's name and its fields' types.
+        //
+        // The field order is significant. A struct's fields are laid
+        // out in this order in the graph and on the wire. Do not
+        // reorder them without regenerating every .lucgraph that uses
+        // the struct.
+
+        static const StructFieldInfo vec2Fields[] = {
+            {"x", TypeId::primitive("float32")},
+            {"y", TypeId::primitive("float32")},
+        };
+
+        static const StructTypeInfo structs[] = {
+            {"Vector2", ArenaSpan<StructFieldInfo>(vec2Fields, 2)},
+        };
+
         // ─── Node argument lists ──────────────────────────────────────────
         //
         // Each node type declares its arguments positionally. Sema
@@ -562,6 +605,13 @@ namespace my_engine
         static const NodeArgInfo damageArgs[] = {
             {"body",   TypeId::handle("BodyRef")},
             {"amount", TypeId::primitive("int32")},
+        };
+        static const NodeArgInfo vec2CtorArgs[] = {
+            {"x", TypeId::primitive("float32")},
+            {"y", TypeId::primitive("float32")},
+        };
+        static const NodeArgInfo vec2LengthArgs[] = {
+            {"v", TypeId::structType("Vector2")},
         };
 
         // ─── Node types ───────────────────────────────────────────────────
@@ -610,6 +660,22 @@ namespace my_engine
                 ArenaSpan<NodeArgInfo>(addArgs, 2),
                 TypeId::primitive("float32"),
             },
+            {
+                "Vector2Node",
+                NodeKind::Value,
+                "Math",
+                0,
+                ArenaSpan<NodeArgInfo>(vec2CtorArgs, 2),
+                TypeId::structType("Vector2"),  // result is a Vector2
+            },
+            {
+                "Vector2LengthSquaredNode",
+                NodeKind::Value,
+                "Math",
+                0,
+                ArenaSpan<NodeArgInfo>(vec2LengthArgs, 1),
+                TypeId::primitive("float32"),   // result is a float32
+            },
 
             // ─── Action nodes ─────────────────────────────────────────────
             {
@@ -656,7 +722,8 @@ namespace my_engine
             r.phases    = ArenaSpan<PhaseInfo>(phases, 3);
             r.enums     = ArenaSpan<EnumTypeInfo>(enums, 1);
             r.handles   = ArenaSpan<HandleTypeInfo>(handles, 2);
-            r.nodeTypes = ArenaSpan<NodeTypeInfo>(nodeTypes, 7);
+            r.structs   = ArenaSpan<StructTypeInfo>(structs, 1);
+            r.nodeTypes = ArenaSpan<NodeTypeInfo>(nodeTypes, 9);
             return r;
         }();
 
@@ -742,8 +809,16 @@ engine tells itself *how* it runs. The link between them is the
 index of the node type in `nodeTypes`.
 
 ```cpp
+#include <cstring>
+#include <vector>
+
 #include "my_engine/Registry.hpp"
 #include "sema/Graph.hpp"
+
+// `Vector2` is the engine's C++ type for a 2D vector — a struct
+// with two `float32` fields, matching the `Vector2` entry in the
+// registry's `structs` list. The library does not define it; the
+// engine does.
 
 namespace my_engine
 {
@@ -752,6 +827,12 @@ namespace my_engine
     {
         // One result per node, indexed by NodeIndex.
         std::vector<float> results;
+
+        // One byte buffer per node, indexed by NodeIndex. A struct
+        // value produced by a Value node lives here, not in the
+        // graph's struct pool, which holds only compile-time
+        // constants.
+        std::vector<std::vector<char>> structResults;
 
         // The engine's own handle table. A handle is an opaque token
         // in the graph; the engine maps it back to a real object.
@@ -792,7 +873,30 @@ namespace my_engine
             const float b = ctx.results[args[1].node_ref];
             ctx.results[i] = a + b;
         },
-        // ─── 3: MoveBody ──────────────────────────────────────────────────
+        // ─── 3: Vector2Node ───────────────────────────────────────────────
+        [](ExecutionContext& ctx, lucid::sema::NodeIndex i,
+           const lucid::sema::Graph& g) {
+            const auto args = g.argsOf(g.nodes[i]);
+            const float x = args[0].literal.f;
+            const float y = args[1].literal.f;
+
+            // Store the Vector2 in the runtime's per-node struct storage.
+            Vector2 v{x, y};
+            auto& slot = ctx.structResults[i];
+            slot.resize(sizeof(v));
+            std::memcpy(slot.data(), &v, sizeof(v));
+        },
+        // ─── 4: Vector2LengthSquaredNode ──────────────────────────────────
+        [](ExecutionContext& ctx, lucid::sema::NodeIndex i,
+           const lucid::sema::Graph& g) {
+            const auto args = g.argsOf(g.nodes[i]);
+            const auto& slot = ctx.structResults[args[0].node_ref];
+
+            Vector2 v;
+            std::memcpy(&v, slot.data(), sizeof(v));
+            ctx.results[i] = v.x * v.x + v.y * v.y;
+        },
+        // ─── 5: MoveBody ──────────────────────────────────────────────────
         [](ExecutionContext& ctx, lucid::sema::NodeIndex i,
            const lucid::sema::Graph& g) {
             const auto args = g.argsOf(g.nodes[i]);
@@ -801,13 +905,13 @@ namespace my_engine
             const float dy = args[2].literal.f;
             physics_move(body, dx, dy, ctx.deltaTime);
         },
-        // ─── 4: PrintNode ─────────────────────────────────────────────────
+        // ─── 6: PrintNode ─────────────────────────────────────────────────
         [](ExecutionContext& ctx, lucid::sema::NodeIndex i,
            const lucid::sema::Graph& g) {
             const auto args = g.argsOf(g.nodes[i]);
             std::cout << args[0].literal.f << "\n";
         },
-        // ─── 5: Damage ────────────────────────────────────────────────────
+        // ─── 7: Damage ────────────────────────────────────────────────────
         [](ExecutionContext& ctx, lucid::sema::NodeIndex i,
            const lucid::sema::Graph& g) {
             const auto args = g.argsOf(g.nodes[i]);
@@ -816,7 +920,7 @@ namespace my_engine
                 static_cast<int32_t>(args[1].literal.i);
             apply_damage(body, amount);
         },
-        // ─── 6: EveryFrame ────────────────────────────────────────────────
+        // ─── 8: EveryFrame ────────────────────────────────────────────────
         [](ExecutionContext&, lucid::sema::NodeIndex,
            const lucid::sema::Graph&) {
             // Triggers do not execute. They fire subscribers, which
@@ -855,6 +959,11 @@ both, at the same index, and the fingerprint changes. Nothing else
 about the format library changes; the library does not know the
 node's name, its behavior, or its category, and does not need to.
 
+A node that produces a struct stores the bytes in the runtime's per-node
+`structResults` buffer; a node that consumes a struct reads the bytes
+from the referenced node's buffer. How the engine stores them is its own
+design; the library requires only the `NodeExecutor` shape.
+
 #### 14.5.1 Gating triggers
 
 The dispatch above runs actions. It does not describe how triggers
@@ -892,7 +1001,7 @@ kind participates in the event graph.
 
 ### 14.6 What the engine team must remember
 
-Six rules that follow from the split:
+Seven rules that follow from the split:
 
 1. **Keep the arrays alive.** The `Registry` holds spans into
    `static const` arrays. If any of them lives on the stack or is
@@ -935,3 +1044,13 @@ Six rules that follow from the split:
    an enum with no zero member is a malformed registry: Sema reports
    `Registry_EnumWithoutZero` and the compile fails. Declare every
    enum with at least one member whose value is `0`.
+
+7. **Do not reorder a struct's fields.** A struct value is a contiguous
+   run of bytes, with fields laid out in the struct type's declared
+   field order. Reordering the fields in the registry changes the layout
+   of every struct value in the graph and on the wire. The fingerprint
+   changes, so stale `.lucgraph` files are refused — but any graph
+   compiled with the old field order and re-serialized with the new
+   order produces a different file for the same value. Do it
+   deliberately, with a changelog entry, and regenerate every
+   `.lucgraph`.

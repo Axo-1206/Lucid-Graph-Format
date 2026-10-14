@@ -63,7 +63,8 @@ Plus two cross-cutting pieces that sit alongside the layers:
 - **The `Graph` structure** — the output of Sema, the input of the
   engine, and the payload of the serialization layer.
 - **The `Registry` interface** — the engine's declaration of node
-  types, enum types, handle types, and phases. Sema reads it.
+  types, enum types, handle types, struct types, and phases. Sema
+  reads it.
 
 Dependencies flow upward only. `core` depends on nothing. `parser`
 depends on `core`. `formatter` depends on `core` and `parser`.
@@ -324,9 +325,9 @@ validated `Graph`. It is where the language's rules are enforced.
 for the same operation without the parse.
 
 **`Registry.hpp`** — the interface between the engine and the
-library. Node types, enum types, handle types, and phases. Sema
-reads it; the engine builds it. Also declares
-`computeRegistryFingerprint`.
+library. Node types, enum types, handle types, struct types, and
+phases. Sema reads it; the engine builds it. Also declares
+`computeRegistryFingerprint` and `validateRegistry`.
 
 **`Graph.hpp`** — the `Graph` structure. Flat vectors of
 `NodeInstance`, `Arg`, `Resource`, and `ResourceField`, plus two
@@ -414,6 +415,22 @@ a value, and the runtime reads it directly. This is what makes
 resources immutable: the graph stores values, not "defaults that
 might be overridden." An engine that needs mutable runtime state
 keeps it outside the graph.
+
+**Struct types.** Sema's type system has four kinds: primitive, enum,
+handle, and struct. A struct is a compound value declared by the
+registry. Sema resolves a struct type's name against the registry's
+`structs` list the same way it resolves an enum or handle: the name is
+looked up, and if it is declared, it is a valid type. A struct
+argument's type is the struct's name; two structs are compatible only if
+their names match, even if their field layouts are identical. This is
+the same rule enums and handles follow — a `BodyRef` is not a
+`TextureRef` — and it prevents accidental misuse of one struct where
+another is expected.
+
+The registry is validated once per compile: every struct field's type
+must resolve to a declared type, and the struct reference graph must be
+acyclic. A malformed registry fails the compile before any source is
+analyzed.
 
 ### 6.4 Trigger gating
 
@@ -520,7 +537,7 @@ a byte vector.
 buffer into a `Graph`.
 
 **`BinaryFormat.hpp`** — the layout of the binary format: the
-header, the section table, the eight sections, and every wire
+header, the section table, the nine sections, and every wire
 constant (magic, format version, section IDs, arg kinds, literal
 kinds, type kinds).
 
@@ -550,10 +567,15 @@ The format is **versioned**. The header carries a `format_version`
 field. A future change to the byte layout increments it. A loader
 that does not recognize the version refuses the file.
 
-The format has **eight sections**, all required in version 1, each
-listed in a section table that carries its ID and size. The loader
-dispatches on ID, not position, which makes the format
+The format has **nine sections**, all required in the current
+version, each listed in a section table that carries its ID and size.
+The loader dispatches on ID, not position, which makes the format
 forward-compatible within a version.
+
+Due to historical and development reasons, the format version number
+is not shown in the official documents. Check
+[`BinaryFormat.hpp`](../serialization/include/serialization/BinaryFormat.hpp)
+directly (`kFormatVersion`).
 
 Serialization is not needed during development. A developer working
 in the editor uses the in-memory `Graph` directly. Serialization
@@ -652,11 +674,23 @@ struct Graph
     std::vector<NodeIndex>       subscribers;
     std::vector<NodeIndex>       phase_order;
     std::vector<NodeIndex>       value_order;
+
+    // String literals. A Literal::Kind::String holds (offset, length)
+    // into this pool.
     std::vector<char>            string_pool;
 
-    // The boundary between the graph's literals and its interned names.
+    // Struct constants. A Literal::Kind::Struct holds (offset, length)
+    // into this pool. Only compile-time constant struct values live
+    // here; struct values produced by value nodes at runtime live in
+    // the engine's execution context.
+    std::vector<char>            struct_value_pool;
+
+    // The boundary between the graph's string literals and the names
+    // interned during serialization. See `literal_pool_size`'s doc
+    // comment in `sema/Graph.hpp`.
     uint32_t literal_pool_size = 0;
 
+    // The fingerprint of the registry the graph was compiled against.
     uint64_t registry_fingerprint = 0;
 };
 
@@ -691,6 +725,14 @@ struct ResourceField
     Literal     value;  // the field's value; always resolved
 };
 ```
+
+The `struct_value_pool` is a compile-time-constant pool, parallel to
+`string_pool`. A `Literal::Kind::Struct` value holds an `(offset,
+length)` into it; the bytes at that range are the struct's fields, laid
+out in the struct type's declared field order. The pool holds only
+structs that Sema folded from source — a resource field's zero, or any
+future constant folding. A struct produced by a value node at runtime
+never reaches the graph; it lives in the runtime's execution context.
 
 A `ResourceField` always has a value. A field written with
 `= value` in source has that value; a field written without one has

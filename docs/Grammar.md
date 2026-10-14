@@ -220,11 +220,9 @@ A resource field has a name, a type, and an optional initial value. A field writ
 
 The initial value is a `value` (§2.7), not only a literal, so enum member access such as `Key.A` or `Direction.North` is accepted. The grammar allows any value; Sema enforces that the value is meaningful for the field's type.
 
-**A resource is a compile-time constant.** A resource's fields are resolved to concrete values when the module is compiled. A field with a written value has that value; a field without one has the type's zero (`false` for `bool`, `0` for integers, `0.0` for floats, the empty string for `string`, `nil` for handles, and the enum's zero-valued member for an enum). After compilation there is no distinction between the two cases: the field has a value, and that value does not change at runtime.
+**A resource is a compile-time constant.** A resource's fields are resolved to concrete values when the module is compiled. A field with a written value has that value; a field without one has the type's zero (`false` for `bool`, `0` for integers, `0.0` for floats, the empty string for `string`, `nil` for handles, the member with value `0` for an enum, and every field zeroed for a struct). After compilation there is no distinction between the two cases: the field has a value, and that value does not change at runtime.
 
-A resource cannot be mutated by a node. A node may *read* a resource field (by referencing it as an argument, e.g. `PrintNode(Config.speed)`), and the value it reads is always the constant resolved at compile time. Runtime state — values that change per tick or per entity — is not a resource's concern. The engine represents runtime state elsewhere (in tables or in its own entity storage, depending on the engine's design); the format has no mutable-resource construct.
-
-For an enum-typed field written without a value, the field's value is the enum member whose integer value is `0`. This requires the enum's declaration in the engine's registry to have a member with value `0`. If it does not, Sema reports a registry error (`Registry_EnumWithoutZero`) at compile time; the field cannot be zero-initialized. The engine's responsibility is to declare every enum with at least one member whose value is `0`.
+**Struct-typed resource fields are always zero-initialized.** A struct value in source is a node call (§2.8), and a node call is not a compile-time constant. A resource field whose type is a struct cannot have a written initial value; Sema reports `Type_InvalidDefault` if one is written. The field's value is the struct's zero, resolved at compile time.
 
 `type_id` allows one level of module qualification, using `::` as the separator: `Key` from the local scope, `keys::Key` from the module `core.keys`.
 
@@ -247,17 +245,6 @@ resource PlayerState {
 }
 ```
 
-The examples above write a value on every field. Omitting a value is legal and means "the type's zero":
-
-```
-resource Defaults {
-    speed:  float,   -- 0.0
-    hp:     int,     -- 0
-    dead:   bool,    -- false
-    target: BodyRef, -- nil
-}
-```
-
 A resource with no fields is written `resource R { }`, and the `resource_field_list` production is not entered.
 
 ### 2.6 Nodes
@@ -274,7 +261,7 @@ trigger_list ::= IDENTIFIER { ',' IDENTIFIER } [ ',' ]
 A node is `node <name> = <NodeType>(<args>)`, optionally followed by `on <trigger>, <trigger>, ...`.
 
 ```
-node speed       = Float32Node(200.0)
+node speed       = Engine_Float32Node(200.0)
 node input_x     = InputAxis1D(Key.A, Key.D)
 node body        = BodyNode(player)
 node on_hit      = OnCollision(body, "hazard")
@@ -294,8 +281,8 @@ optional `on` clause on `node_decl`, not on a specific node kind.
 Syntactically, any node declaration may have an `on` clause:
 
 ```
-node source       = EveryFrameNode()                   -- a trigger, no `on`
-node gated        = IfNode(condition) on source        -- a trigger, with `on`
+node source       = Engine_EveryFrameNode()                   -- a trigger, no `on`
+node gated        = Engine_IfNode(condition) on source        -- a trigger, with `on`
 node effect       = ApplyGravityNode(player) on gated  -- an action, with `on`
 ```
 
@@ -330,9 +317,9 @@ literal ::= INT_LIT
           | NIL_LIT
 ```
 
-A `value` is what may appear as an argument to a node or as the initial value of a resource field.
+A `value` is what may appear as an argument to a node or as the default of a resource field.
 
-A bare literal is equivalent to a primitive node whose argument is that literal: `200.0` ≡ `Float32Node(200.0)`, `10` ≡ `Int32Node(10)`, `"hit.wav"` ≡ `StringNode("hit.wav")`. A signed literal is a literal like any other: `-400.0` ≡ `Float32Node(-400.0)`.
+A bare literal is equivalent to a primitive node whose argument is that literal: `200.0` ≡ `Engine_Float32Node(200.0)`, `10` ≡ `Engine_Int32Node(10)`, `"hit.wav"` ≡ `StringNode("hit.wav")`. A signed literal is a literal like any other: `-400.0` ≡ `Engine_Float32Node(-400.0)`.
 
 An `IDENTIFIER` alone refers to a node or a resource by name.
 
@@ -349,13 +336,28 @@ A `node_expr` at value position creates an inline node. It is valid but discoura
 
 ### 2.8 The type system
 
-The format recognizes three kinds of type. Every type used anywhere in a Lucid file falls into one of them.
+The format recognizes four kinds of type. Every type used anywhere in a Lucid file falls into one of them.
 
 **Primitive types.** `bool`, `char`, `string`, and the sized integer and float types (`int8` through `int64`, `uint8` through `uint64`, `float32`, `float64`). A primitive is a value: it can be read, assigned, passed as an argument, and stored in a resource.
 
 **Enum types.** A named set of members declared by the host (`Key`, `Direction`). An enum member is a value, in the same sense as a primitive: it can be read, assigned, passed, and stored.
 
 **Handle types.** Named, opaque references declared by the host (`BodyRef`, `TextureRef`, `SoundRef`, `SpriteRef`, `Array`, and any host-specific handles). A handle is a value: it can be read, assigned, passed, and stored. Handles are references — passing a handle shares the underlying resource rather than copying it. Every handle type has `nil` as a valid value, meaning "no resource."
+
+**Struct types.** A named, compound value declared by the host: a set of fields, each with its own type. `Vector2` (fields `x` and `y`, both `float32`), `Color` (fields `r`, `g`, `b`, `a`, all `float32`), and `Transform` (a `Vector2` position, a `float32` rotation, a `float32` scale) are examples. A struct is a value in the same sense as a primitive: it can be read, assigned, passed, and stored. Struct values are copied, not referenced — passing a `Vector2` copies both floats.
+
+A struct field's type is a primitive, an enum, a handle, or another struct. A struct cannot contain itself, directly or transitively; Sema reports `Registry_StructCycle` if the registry declares a cycle. The registry's struct declarations are validated at the start of every compile.
+
+**Struct values are produced by node calls.** The grammar has no struct-literal syntax. A struct value in source is written as a call to a value node whose result type is a struct:
+
+```
+node v  = Vector2Node(1.5, -2.5)
+node ls = Vector2LengthSquaredNode(v)
+```
+
+`Vector2Node` is a value node declared by the host. Its arguments are the fields' values, in the order the host declares them. Its result type is `Vector2`. A node whose argument is a `Vector2` — like `Vector2LengthSquaredNode` — accepts the reference to the node that produced the `Vector2`.
+
+There is no `Vector2 { x: 1.5, y: -2.5 }` syntax, and no plan to add one. A struct value that appears in argument position is written as a node call. This keeps the grammar unchanged and the type checker simple: a struct value's type is determined by the node that produced it, exactly as a `float32` value's type is determined by the node that produced it.
 
 **Trigger sources.** A trigger source is anything an `on` clause can target. One thing is a trigger source:
 
@@ -485,7 +487,9 @@ The grammar accepts a trailing comma in all four comma-separated lists. The form
 
 The registry assigns numeric IDs to node types and types. These IDs are used in `.lucgraph` files. If the registry changes between the build that serialized a graph and the build that loads it, the graph may not load.
 
-**Open question:** Should `.lucgraph` files carry a registry fingerprint, so that mismatches are reported clearly rather than causing a silent misbinding? The current spec does not describe such a check.
+**Resolved:** Yes. The `.lucgraph` header carries a 64-bit fingerprint of the registry the graph was compiled against. The loader computes the fingerprint of its own registry and refuses the file on a mismatch. The fingerprint is an FNV-1a hash over a canonical byte-level serialization of the registry's contents. See [`Architecture.md`](Architecture.md) §6.3 and §7.3 for where it is computed and checked.
+
+A change to the registry's contents — adding a node type, changing an argument list, reordering a struct's fields, reordering an enum's members — changes the fingerprint, and every `.lucgraph` compiled against the old registry must be regenerated. The loader will not silently misbind.
 
 ### 4.9 Plugin-registered node types
 
@@ -504,6 +508,12 @@ The grammar allows `-0xFF`, `-0b1010`, and `-0o17`. Is a sign meaningful for a r
 The grammar allows an explicit `+` on a numeric literal (`+7`, `+3.14`). This is symmetric with `-` and costs one lexer branch. It is rarely useful; a reader who sees `+7` may wonder why the author wrote it.
 
 **Open question:** Should `+` be allowed, or should the grammar accept only `-`? The current grammar allows both, for symmetry.
+
+### 4.12 Struct fields and defaults
+
+A struct-typed resource field is always zero-initialized. The grammar allows a written value (`origin: Vector2 = ...`), but Sema rejects it because a struct value in source is a node call and a node call is not a compile-time constant. A future design could allow the field's value to be a constant-folded node expression, if the host declares which node types are foldable.
+
+**Open question:** Should struct-typed resource fields ever take an initial value? The current answer is no. The alternative is a "constant expression" concept in the grammar, which the language does not have today.
 
 ---
 

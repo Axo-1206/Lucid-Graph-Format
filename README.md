@@ -135,6 +135,27 @@ Key properties:
   runtime. A field written without `= value` takes the type's
   zero. Runtime state is not a resource's concern.
 
+- **Structs are compound values.** A struct is a named set of
+  fields, each a primitive, an enum, a handle, or another struct.
+  `Vector2`, `Color`, and `Transform` are structs. A struct value
+  is a value: it is copied on assignment, not shared by reference.
+
+**Struct values come from node calls.** The grammar has no
+struct-literal syntax. A struct value is written as a call to a
+value node whose result type is a struct:
+
+```
+node v      = Vector2Node(1.5, -2.5)
+node length = Vector2LengthSquaredNode(v)
+```
+
+`Vector2Node` is a value node the engine registers; its two
+`float32` arguments are the struct's fields.
+`Vector2LengthSquaredNode` takes a `Vector2` and returns a
+`float32`. The type system checks that the arguments match the
+node types' declared types, exactly as it does for `float32` or
+any other type.
+
 The complete grammar is in [`docs/Grammar.md`](docs/Grammar.md).
 
 ---
@@ -142,7 +163,7 @@ The complete grammar is in [`docs/Grammar.md`](docs/Grammar.md).
 ## The `.lucgraph` format
 
 A `.lucgraph` file is a 32-byte header followed by a section table
-and eight sections. Every integer is little-endian; sections are
+and nine sections. Every integer is little-endian; sections are
 packed with no alignment padding.
 
 The header carries the format version, a registry fingerprint, and
@@ -208,14 +229,15 @@ build tool writes a `.lucgraph`, the engine reads it back.
 ### The registry
 
 Every name and every type in a `.lucid` file is resolved against a
-`Registry`: a list of node types, enum types, handle types, and
-execution phases that the engine provides. The format library does
+`Registry`: a list of node types, enum types, handle types, struct
+types, and execution phases that the engine provides. The format library does
 not know what `MoveBody` does or what a `BodyRef` points at; it
 only knows the shapes the registry declares.
 
 The registry's **shape** is defined by the format library:
-`NodeTypeInfo`, `EnumTypeInfo`, `HandleTypeInfo`, `PhaseInfo`, and
-the `NodeKind` enum all live in `sema/include/sema/`.
+`NodeTypeInfo`, `EnumTypeInfo`, `HandleTypeInfo`, `StructTypeInfo`,
+`PhaseInfo`, and the `NodeKind` enum all live in
+`sema/include/sema/`.
 
 Every enum the registry declares must have a member whose integer
 value is `0`. A resource field written without a value takes the
@@ -223,13 +245,15 @@ type's zero, and for an enum, that zero is the member with value
 `0`. Sema reports a registry error if an enum has no such member.
 
 The registry's **content** is the engine's. The engine lists its
-nodes, their arguments, their kinds, and their phases. The format
-library reads this at compile time to check every call site, and at
-load time to verify the fingerprint.
+nodes, their arguments, their kinds, and their phases; its enum
+types and their members; its handle types; and its struct types and
+their fields. The format library reads this at compile time to check
+every call site, and at load time to verify the fingerprint.
 
-A complete, compilable sample — a registry for a small engine, plus
-the runtime dispatch table that runs the graph it produces — lives
-in
+A complete, compilable sample — a registry for a small engine,
+including a `Vector2` struct and its constructor and consumer nodes,
+plus the runtime dispatch table that runs the graph it produces —
+lives in
 [`docs/notes/RegistryContractNote.md`](docs/notes/RegistryContractNote.md)
 §14. Read it if you are writing a registry for the first time.
 
@@ -255,6 +279,11 @@ in
   references them.
 - Know what a handle points at. The library carries a handle's type
   name and its value; the engine resolves both.
+- Know what a struct's fields *mean*. The library knows a
+  `Vector2` has fields `x` and `y` of type `float32`, because the
+  registry says so. It does not know that they are coordinates, or
+  how to add two `Vector2`s, or what a `Vector2` is used for. The
+  engine supplies the meaning; the library checks the shape.
 - Own the engine's resources. Handles, bodies, textures, and any
   other engine-side object live in the engine.
 
